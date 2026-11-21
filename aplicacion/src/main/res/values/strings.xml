@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nombre_aplicacion">Redact Code</string>
+    <string name="canal_repasos_nombre">Repasos programados</string>
+    <string name="canal_repasos_descripcion">Recordatorios de fragmentos que toca repasar</string>
+</resources>

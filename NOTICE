@@ -1,0 +1,21 @@
+Redact Code
+Copyright (c) 2026 Calliecookie. Todos los derechos reservados.
+Licencia propia: LICENSE.
+
+Este producto incluye o usa los siguientes componentes de terceros. Cada uno
+se rige por su propia licencia, que esta no modifica.
+
+Incluidos en el repositorio
+- Acorn · MIT
+  nucleo/src/main/resources/pe/redactcode/nucleo/js/LICENCIA_ACORN.txt
+- JetBrains Mono · SIL Open Font License 1.1
+  recursos_graficos/LICENCIA_JETBRAINS_MONO_OFL.txt
+
+Bibliotecas que se descargan al compilar
+- Sora Editor (io.github.rosemoe) · LGPL-2.1
+- Rhino (org.mozilla) · MPL-2.0
+- jsoup · MIT
+- Chaquopy · MIT; intérprete de Python · PSF License
+- SDK de Anthropic para Java · MIT
+- AndroidX, Jetpack Compose, íconos Material, Kotlin, kotlinx, Dagger/Hilt,
+  OkHttp y Retrofit · Apache-2.0

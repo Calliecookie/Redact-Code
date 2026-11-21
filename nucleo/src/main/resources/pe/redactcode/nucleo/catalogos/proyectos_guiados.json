@@ -1,0 +1,172 @@
+[
+  {
+    "id": "calculadora", "titulo": "Calculadora", "nivel": "basico", "lenguaje": "python",
+    "objetivo": "Construir una calculadora con funciones reutilizables y manejo de errores.",
+    "descripcion": "Crearás las cuatro operaciones básicas como funciones y una función principal que elija la operación según el operador recibido.",
+    "requisitos": ["Saber declarar variables", "Conocer los operadores aritméticos"],
+    "conceptos": ["FUNCIONES", "CONDICIONALES", "EXCEPCIONES"],
+    "archivosIniciales": {
+      "calculadora.py": "def sumar(a, b):\n    pass\n\n\ndef restar(a, b):\n    pass\n\n\ndef multiplicar(a, b):\n    pass\n\n\ndef dividir(a, b):\n    pass\n\n\ndef calcular(a, operador, b):\n    pass\n\n\nprint(\"Calculadora lista\")\n"
+    },
+    "pasos": [
+      {"titulo": "Sumar y restar", "explicacion": "Una función recibe datos por sus parámetros y devuelve el resultado con return. Empieza por las operaciones más simples.", "objetivo": "Completa sumar(a, b) y restar(a, b).", "pista": "return a + b",
+       "verificaciones": [{"tipo": "funcion", "archivo": "calculadora.py", "funcion": "sumar", "descripcion": "sumar devuelve la suma", "pruebas": [{"entrada": [2, 3], "esperado": 5}, {"entrada": [-1, 1], "esperado": 0}]},
+                          {"tipo": "funcion", "archivo": "calculadora.py", "funcion": "restar", "descripcion": "restar devuelve la diferencia", "pruebas": [{"entrada": [10, 4], "esperado": 6}, {"entrada": [0, 5], "esperado": -5}]}]},
+      {"titulo": "Multiplicar", "explicacion": "Las funciones pequeñas son fáciles de probar y de reutilizar.", "objetivo": "Completa multiplicar(a, b).", "pista": "Usa el operador *.",
+       "verificaciones": [{"tipo": "funcion", "archivo": "calculadora.py", "funcion": "multiplicar", "descripcion": "multiplicar devuelve el producto", "pruebas": [{"entrada": [3, 4], "esperado": 12}, {"entrada": [2.5, 2], "esperado": 5.0}]}]},
+      {"titulo": "Dividir con seguridad", "explicacion": "Dividir entre cero produce ZeroDivisionError. Una calculadora robusta debe anticipar ese caso.", "objetivo": "Completa dividir(a, b) para que devuelva None cuando b sea 0.", "pista": "Comprueba if b == 0: antes de dividir.",
+       "verificaciones": [{"tipo": "funcion", "archivo": "calculadora.py", "funcion": "dividir", "descripcion": "dividir maneja la división entre cero", "pruebas": [{"entrada": [10, 4], "esperado": 2.5}, {"entrada": [5, 0], "esperado": null}]}]},
+      {"titulo": "Elegir la operación", "explicacion": "La función calcular reutiliza las anteriores según el operador. Así evitas repetir lógica.", "objetivo": "Completa calcular(a, operador, b) para los operadores +, -, * y /. Con un operador desconocido devuelve None.", "pista": "Usa if/elif comparando operador == \"+\" y llama a la función correspondiente.",
+       "verificaciones": [{"tipo": "funcion", "archivo": "calculadora.py", "funcion": "calcular", "descripcion": "calcular usa la operación correcta", "pruebas": [{"entrada": [6, "*", 7], "esperado": 42}, {"entrada": [9, "/", 3], "esperado": 3.0}, {"entrada": [8, "-", 10], "esperado": -2}, {"entrada": [1, "%", 2], "esperado": null}]}]}
+    ],
+    "resultadoEsperado": "Un módulo con cinco funciones probadas que realizan cálculos y manejan operaciones inválidas sin detener el programa."
+  },
+  {
+    "id": "lista-tareas", "titulo": "Lista de tareas", "nivel": "basico", "lenguaje": "javascript",
+    "objetivo": "Programar la lógica de una lista de tareas y verla funcionar en una página web.",
+    "descripcion": "La interfaz ya está lista en index.html y app.js. Tu trabajo es completar tareas.js, que contiene la lógica sin depender de la página.",
+    "requisitos": ["Conocer arreglos y objetos", "Saber declarar funciones"],
+    "conceptos": ["LISTAS", "OBJETOS", "FUNCIONES"],
+    "archivosIniciales": {
+      "index.html": "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Mis tareas</title>\n  <link rel=\"stylesheet\" href=\"estilos.css\">\n</head>\n<body>\n  <main>\n    <h1>Mis tareas</h1>\n    <form id=\"formulario\">\n      <label for=\"nueva-tarea\">Nueva tarea</label>\n      <input id=\"nueva-tarea\" autocomplete=\"off\">\n      <button type=\"submit\">Agregar</button>\n    </form>\n    <ul id=\"lista\"></ul>\n    <p id=\"contador\"></p>\n  </main>\n  <script src=\"tareas.js\"></script>\n  <script src=\"app.js\"></script>\n</body>\n</html>\n",
+      "estilos.css": "body {\n  font-family: system-ui, sans-serif;\n  background: #0d0d0f;\n  color: #f5f5f7;\n  margin: 0;\n  padding: 24px;\n}\n\nform {\n  display: flex;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\ninput {\n  flex: 1;\n  padding: 10px;\n  border-radius: 8px;\n  border: 1px solid #333;\n  background: #151518;\n  color: inherit;\n}\n\nli.hecha {\n  text-decoration: line-through;\n  color: #77777f;\n}\n",
+      "tareas.js": "function agregarTarea(lista, texto) {\n  return lista;\n}\n\nfunction completarTarea(lista, indice) {\n  return lista;\n}\n\nfunction pendientes(lista) {\n  return 0;\n}\n",
+      "app.js": "const estado = { tareas: [] };\nconst formulario = document.getElementById(\"formulario\");\nconst entrada = document.getElementById(\"nueva-tarea\");\nconst lista = document.getElementById(\"lista\");\nconst contador = document.getElementById(\"contador\");\n\nfunction dibujar() {\n  lista.textContent = \"\";\n  estado.tareas.forEach((tarea, indice) => {\n    const item = document.createElement(\"li\");\n    item.textContent = tarea.texto;\n    if (tarea.hecha) item.classList.add(\"hecha\");\n    item.addEventListener(\"click\", () => {\n      estado.tareas = completarTarea(estado.tareas, indice);\n      dibujar();\n    });\n    lista.appendChild(item);\n  });\n  contador.textContent = `${pendientes(estado.tareas)} pendientes`;\n}\n\nformulario.addEventListener(\"submit\", (evento) => {\n  evento.preventDefault();\n  estado.tareas = agregarTarea(estado.tareas, entrada.value);\n  entrada.value = \"\";\n  dibujar();\n});\n\ndibujar();\n"
+    },
+    "pasos": [
+      {"titulo": "Agregar tareas", "explicacion": "Cada tarea es un objeto con texto y un indicador hecha. Devolver una lista nueva en lugar de modificar la original evita efectos inesperados.", "objetivo": "Completa agregarTarea(lista, texto): devuelve una nueva lista con {texto, hecha: false} al final. Ignora textos vacíos y quita los espacios sobrantes.", "pista": "const limpio = texto.trim(); if (!limpio) return lista; return [...lista, { texto: limpio, hecha: false }];",
+       "verificaciones": [{"tipo": "funcion", "archivo": "tareas.js", "funcion": "agregarTarea", "descripcion": "agregarTarea crea tareas válidas", "pruebas": [{"entrada": [[], "Estudiar"], "esperado": [{"texto": "Estudiar", "hecha": false}]}, {"entrada": [[{"texto": "A", "hecha": true}], "  "], "esperado": [{"texto": "A", "hecha": true}]}, {"entrada": [[], "  Leer "], "esperado": [{"texto": "Leer", "hecha": false}]}]}]},
+      {"titulo": "Completar tareas", "explicacion": "map recorre la lista y permite devolver una copia modificada solo del elemento indicado.", "objetivo": "Completa completarTarea(lista, indice) para marcar como hecha la tarea de ese índice. Si el índice no existe, devuelve la lista igual.", "pista": "lista.map((t, i) => i === indice ? { ...t, hecha: true } : t)",
+       "verificaciones": [{"tipo": "funcion", "archivo": "tareas.js", "funcion": "completarTarea", "descripcion": "completarTarea marca la tarea correcta", "pruebas": [{"entrada": [[{"texto": "A", "hecha": false}, {"texto": "B", "hecha": false}], 1], "esperado": [{"texto": "A", "hecha": false}, {"texto": "B", "hecha": true}]}, {"entrada": [[{"texto": "A", "hecha": false}], 5], "esperado": [{"texto": "A", "hecha": false}]}]}]},
+      {"titulo": "Contar pendientes", "explicacion": "filter selecciona los elementos que cumplen una condición; su length indica cuántos son.", "objetivo": "Completa pendientes(lista) para devolver cuántas tareas no están hechas.", "pista": "lista.filter(t => !t.hecha).length",
+       "verificaciones": [{"tipo": "funcion", "archivo": "tareas.js", "funcion": "pendientes", "descripcion": "pendientes cuenta correctamente", "pruebas": [{"entrada": [[{"texto": "A", "hecha": false}, {"texto": "B", "hecha": true}, {"texto": "C", "hecha": false}]], "esperado": 2}, {"entrada": [[]], "esperado": 0}]}]}
+    ],
+    "resultadoEsperado": "Al abrir index.html en la vista previa puedes agregar tareas, tocarlas para completarlas y ver cuántas quedan pendientes."
+  },
+  {
+    "id": "pagina-personal", "titulo": "Página web personal", "nivel": "basico", "lenguaje": "html",
+    "objetivo": "Crear una página personal con estructura semántica y estilos propios.",
+    "descripcion": "Construirás una página con encabezado, presentación, habilidades y contacto, y le darás estilo con CSS.",
+    "requisitos": ["Ninguno: es un buen primer proyecto"],
+    "conceptos": ["HTML_ESTRUCTURA", "CSS_ESTILOS"],
+    "archivosIniciales": {
+      "index.html": "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Mi página</title>\n  <link rel=\"stylesheet\" href=\"estilos.css\">\n</head>\n<body>\n\n</body>\n</html>\n",
+      "estilos.css": "\n"
+    },
+    "pasos": [
+      {"titulo": "Estructura semántica", "explicacion": "header, main y footer indican al navegador y a los lectores de pantalla qué papel cumple cada parte.", "objetivo": "Dentro de body agrega un header con un h1 que tenga tu nombre, un main y un footer.", "pista": "<header>\n  <h1>Tu nombre</h1>\n</header>\n<main></main>\n<footer></footer>",
+       "verificaciones": [{"tipo": "selector_html", "archivo": "index.html", "selector": "header h1", "descripcion": "Existe un h1 dentro de header"}, {"tipo": "selector_html", "archivo": "index.html", "selector": "body > main", "descripcion": "Existe el elemento main"}, {"tipo": "selector_html", "archivo": "index.html", "selector": "body > footer", "descripcion": "Existe el elemento footer"}]},
+      {"titulo": "Sobre mí", "explicacion": "section agrupa contenido relacionado. El atributo id permite enlazarla o darle estilos.", "objetivo": "Dentro de main agrega una section con id=\"sobre-mi\" que contenga un h2 y un párrafo.", "pista": "<section id=\"sobre-mi\">\n  <h2>Sobre mí</h2>\n  <p>...</p>\n</section>",
+       "verificaciones": [{"tipo": "selector_html", "archivo": "index.html", "selector": "main section#sobre-mi h2", "descripcion": "La sección tiene un h2"}, {"tipo": "selector_html", "archivo": "index.html", "selector": "main section#sobre-mi p", "descripcion": "La sección tiene un párrafo"}]},
+      {"titulo": "Habilidades", "explicacion": "Las listas sin orden (ul) agrupan elementos (li) sin un orden específico.", "objetivo": "Agrega en main una lista ul con al menos tres habilidades.", "pista": "<ul>\n  <li>Python</li>\n  <li>HTML</li>\n  <li>Trabajo en equipo</li>\n</ul>",
+       "verificaciones": [{"tipo": "selector_html", "archivo": "index.html", "selector": "main ul li:nth-of-type(3)", "descripcion": "La lista tiene al menos tres elementos"}]},
+      {"titulo": "Contacto", "explicacion": "Un enlace mailto: abre la aplicación de correo con la dirección indicada.", "objetivo": "En el footer agrega un enlace que empiece con mailto:.", "pista": "<a href=\"mailto:tu@correo.pe\">Escríbeme</a>",
+       "verificaciones": [{"tipo": "selector_html", "archivo": "index.html", "selector": "footer a[href^='mailto:']", "descripcion": "Existe un enlace de correo en el footer"}]},
+      {"titulo": "Estilos", "explicacion": "Las reglas CSS combinan un selector con declaraciones. Define una tipografía legible y un color para el encabezado.", "objetivo": "En estilos.css agrega una regla para body con font-family y otra para header con background-color.", "pista": "body {\n  font-family: system-ui, sans-serif;\n}\n\nheader {\n  background-color: #151518;\n}",
+       "verificaciones": [{"tipo": "regla_css", "archivo": "estilos.css", "selector": "body", "propiedad": "font-family", "descripcion": "body define font-family"}, {"tipo": "regla_css", "archivo": "estilos.css", "selector": "header", "propiedad": "background-color", "descripcion": "header define background-color"}]}
+    ],
+    "resultadoEsperado": "Una página personal estructurada y con estilo propio, visible en la vista previa."
+  },
+  {
+    "id": "conversor-monedas", "titulo": "Conversor de monedas", "nivel": "basico", "lenguaje": "python",
+    "objetivo": "Convertir montos entre soles y dólares con validación de datos.",
+    "descripcion": "Implementarás conversiones con redondeo a dos decimales y validarás entradas inválidas.",
+    "requisitos": ["Funciones", "Condicionales básicos"],
+    "conceptos": ["FUNCIONES", "TIPOS_DATOS", "LISTAS"],
+    "archivosIniciales": {
+      "conversor.py": "def soles_a_dolares(soles, tipo_cambio):\n    pass\n\n\ndef dolares_a_soles(dolares, tipo_cambio):\n    pass\n\n\ndef tabla_conversion(montos, tipo_cambio):\n    pass\n\n\nprint(soles_a_dolares(100, 3.75))\n"
+    },
+    "pasos": [
+      {"titulo": "Convertir", "explicacion": "round(valor, 2) redondea a dos decimales, como se muestra el dinero.", "objetivo": "Completa soles_a_dolares (divide) y dolares_a_soles (multiplica), ambas redondeadas a 2 decimales.", "pista": "return round(soles / tipo_cambio, 2)",
+       "verificaciones": [{"tipo": "funcion", "archivo": "conversor.py", "funcion": "soles_a_dolares", "descripcion": "Convierte soles a dólares", "pruebas": [{"entrada": [100, 3.75], "esperado": 26.67}, {"entrada": [37.5, 3.75], "esperado": 10.0}]},
+                          {"tipo": "funcion", "archivo": "conversor.py", "funcion": "dolares_a_soles", "descripcion": "Convierte dólares a soles", "pruebas": [{"entrada": [20, 3.75], "esperado": 75.0}]}]},
+      {"titulo": "Validar", "explicacion": "Validar entradas evita resultados sin sentido, como montos negativos o un tipo de cambio cero.", "objetivo": "Haz que ambas funciones devuelvan None si el monto es negativo o si el tipo de cambio es menor o igual a 0.", "pista": "if soles < 0 or tipo_cambio <= 0:\n    return None",
+       "verificaciones": [{"tipo": "funcion", "archivo": "conversor.py", "funcion": "soles_a_dolares", "descripcion": "Rechaza datos inválidos", "pruebas": [{"entrada": [-5, 3.75], "esperado": null}, {"entrada": [10, 0], "esperado": null}]},
+                          {"tipo": "funcion", "archivo": "conversor.py", "funcion": "dolares_a_soles", "descripcion": "Rechaza datos inválidos", "pruebas": [{"entrada": [-1, 3.75], "esperado": null}]}]},
+      {"titulo": "Tabla de conversión", "explicacion": "Reutiliza tus funciones para procesar varios montos a la vez.", "objetivo": "Completa tabla_conversion(montos, tipo_cambio) para devolver la lista de montos convertidos de soles a dólares.", "pista": "return [soles_a_dolares(m, tipo_cambio) for m in montos]",
+       "verificaciones": [{"tipo": "funcion", "archivo": "conversor.py", "funcion": "tabla_conversion", "descripcion": "Convierte una lista de montos", "pruebas": [{"entrada": [[10, 37.5], 3.75], "esperado": [2.67, 10.0]}, {"entrada": [[], 3.75], "esperado": []}]}]}
+    ],
+    "resultadoEsperado": "Un conversor confiable que redondea correctamente y rechaza datos inválidos."
+  },
+  {
+    "id": "aplicacion-notas", "titulo": "Aplicación de notas", "nivel": "intermedio", "lenguaje": "javascript",
+    "objetivo": "Diseñar la lógica de una aplicación de notas con búsqueda.",
+    "descripcion": "Crearás funciones para crear, buscar y analizar notas, listas para conectarse a cualquier interfaz.",
+    "requisitos": ["Objetos", "Métodos de arreglos y cadenas"],
+    "conceptos": ["OBJETOS", "CADENAS", "LISTAS"],
+    "archivosIniciales": {
+      "notas.js": "function crearNota(titulo, contenido) {\n  \n}\n\nfunction buscarNotas(notas, texto) {\n  \n}\n\nfunction contarPalabras(nota) {\n  \n}\n"
+    },
+    "pasos": [
+      {"titulo": "Crear notas", "explicacion": "Normalizar los datos al crearlos simplifica todo lo demás.", "objetivo": "crearNota devuelve {titulo, contenido} con el título sin espacios sobrantes. Si el título queda vacío, usa \"Sin título\".", "pista": "const limpio = titulo.trim();\nreturn { titulo: limpio || \"Sin título\", contenido };",
+       "verificaciones": [{"tipo": "funcion", "archivo": "notas.js", "funcion": "crearNota", "descripcion": "Crea notas normalizadas", "pruebas": [{"entrada": ["  Compras ", "pan"], "esperado": {"titulo": "Compras", "contenido": "pan"}}, {"entrada": ["", "x"], "esperado": {"titulo": "Sin título", "contenido": "x"}}]}]},
+      {"titulo": "Buscar", "explicacion": "Convertir a minúsculas permite buscar sin importar mayúsculas.", "objetivo": "buscarNotas devuelve las notas cuyo título o contenido incluye el texto buscado, sin distinguir mayúsculas.", "pista": "const t = texto.toLowerCase();\nreturn notas.filter(n => n.titulo.toLowerCase().includes(t) || n.contenido.toLowerCase().includes(t));",
+       "verificaciones": [{"tipo": "funcion", "archivo": "notas.js", "funcion": "buscarNotas", "descripcion": "Filtra por título o contenido", "pruebas": [{"entrada": [[{"titulo": "Compras", "contenido": "pan y leche"}, {"titulo": "Tareas", "contenido": "estudiar"}], "PAN"], "esperado": [{"titulo": "Compras", "contenido": "pan y leche"}]}, {"entrada": [[{"titulo": "Tareas", "contenido": "estudiar"}], "tar"], "esperado": [{"titulo": "Tareas", "contenido": "estudiar"}]}, {"entrada": [[], "x"], "esperado": []}]}]},
+      {"titulo": "Contar palabras", "explicacion": "split con una expresión de espacios separa palabras aunque haya espacios repetidos.", "objetivo": "contarPalabras(nota) devuelve cuántas palabras tiene el contenido de la nota.", "pista": "const limpio = nota.contenido.trim();\nreturn limpio ? limpio.split(/\\s+/).length : 0;",
+       "verificaciones": [{"tipo": "funcion", "archivo": "notas.js", "funcion": "contarPalabras", "descripcion": "Cuenta palabras", "pruebas": [{"entrada": [{"titulo": "a", "contenido": "uno dos  tres"}], "esperado": 3}, {"entrada": [{"titulo": "a", "contenido": ""}], "esperado": 0}]}]}
+    ],
+    "resultadoEsperado": "Un módulo de notas probado que puedes reutilizar en una interfaz web."
+  },
+  {
+    "id": "juego-adivina", "titulo": "Juego: adivina el número", "nivel": "intermedio", "lenguaje": "python",
+    "objetivo": "Programar la lógica de un juego clásico con pistas y puntaje.",
+    "descripcion": "Implementarás las reglas del juego como funciones probables, separadas de la entrada del usuario.",
+    "requisitos": ["Condicionales", "Bucles"],
+    "conceptos": ["CONDICIONALES", "BUCLES", "FUNCIONES"],
+    "archivosIniciales": {
+      "juego.py": "def pista(secreto, intento):\n    pass\n\n\ndef puntaje(intentos):\n    pass\n\n\ndef evaluar_partida(secreto, intentos):\n    pass\n\n\nprint(pista(42, 30))\n"
+    },
+    "pasos": [
+      {"titulo": "Dar pistas", "explicacion": "La función compara el número secreto con el intento y orienta al jugador.", "objetivo": "pista devuelve \"mayor\" si el secreto es mayor que el intento, \"menor\" si es menor y \"correcto\" si son iguales.", "pista": "if secreto > intento:\n    return \"mayor\"",
+       "verificaciones": [{"tipo": "funcion", "archivo": "juego.py", "funcion": "pista", "descripcion": "Da la pista correcta", "pruebas": [{"entrada": [50, 30], "esperado": "mayor"}, {"entrada": [10, 30], "esperado": "menor"}, {"entrada": [7, 7], "esperado": "correcto"}]}]},
+      {"titulo": "Calcular el puntaje", "explicacion": "Premiar menos intentos motiva al jugador. max evita puntajes negativos.", "objetivo": "puntaje(intentos) devuelve 100 menos 10 por cada intento adicional al primero, sin bajar de 0.", "pista": "return max(0, 100 - (intentos - 1) * 10)",
+       "verificaciones": [{"tipo": "funcion", "archivo": "juego.py", "funcion": "puntaje", "descripcion": "Calcula el puntaje", "pruebas": [{"entrada": [1], "esperado": 100}, {"entrada": [3], "esperado": 80}, {"entrada": [15], "esperado": 0}]}]},
+      {"titulo": "Evaluar una partida", "explicacion": "Recorrer la lista con enumerate te da la posición y el valor.", "objetivo": "evaluar_partida(secreto, intentos) devuelve en qué número de intento se acertó (empezando en 1) o -1 si nunca se acertó.", "pista": "for numero, intento in enumerate(intentos, start=1):",
+       "verificaciones": [{"tipo": "funcion", "archivo": "juego.py", "funcion": "evaluar_partida", "descripcion": "Evalúa la partida", "pruebas": [{"entrada": [42, [10, 50, 42]], "esperado": 3}, {"entrada": [7, [1, 2]], "esperado": -1}, {"entrada": [5, []], "esperado": -1}]}]}
+    ],
+    "resultadoEsperado": "Las reglas del juego funcionando y verificadas, listas para conectarse con input() en una versión interactiva."
+  },
+  {
+    "id": "gestor-gastos", "titulo": "Gestor de gastos", "nivel": "intermedio", "lenguaje": "python",
+    "objetivo": "Analizar gastos personales con listas y diccionarios.",
+    "descripcion": "Cada gasto es un diccionario con categoría y monto. Calcularás totales, agrupaciones y el presupuesto disponible.",
+    "requisitos": ["Listas", "Diccionarios", "Bucles"],
+    "conceptos": ["ESTRUCTURAS_DATOS", "OBJETOS", "BUCLES"],
+    "archivosIniciales": {
+      "gastos.py": "def total(gastos):\n    pass\n\n\ndef por_categoria(gastos):\n    pass\n\n\ndef mayor_gasto(gastos):\n    pass\n\n\ndef presupuesto_restante(presupuesto, gastos):\n    pass\n\n\nmis_gastos = [\n    {\"categoria\": \"comida\", \"monto\": 12.5},\n    {\"categoria\": \"transporte\", \"monto\": 3.2},\n]\nprint(total(mis_gastos))\n"
+    },
+    "pasos": [
+      {"titulo": "Total gastado", "explicacion": "Acumula el monto de cada diccionario recorriendo la lista.", "objetivo": "total(gastos) devuelve la suma de los montos.", "pista": "return sum(g[\"monto\"] for g in gastos)",
+       "verificaciones": [{"tipo": "funcion", "archivo": "gastos.py", "funcion": "total", "descripcion": "Suma los montos", "pruebas": [{"entrada": [[{"categoria": "comida", "monto": 12.5}, {"categoria": "transporte", "monto": 3.2}]], "esperado": 15.7}, {"entrada": [[]], "esperado": 0}]}]},
+      {"titulo": "Agrupar por categoría", "explicacion": "Un diccionario permite acumular por clave.", "objetivo": "por_categoria(gastos) devuelve un diccionario {categoria: suma de montos}.", "pista": "resultado[c] = resultado.get(c, 0) + g[\"monto\"]",
+       "verificaciones": [{"tipo": "funcion", "archivo": "gastos.py", "funcion": "por_categoria", "descripcion": "Agrupa correctamente", "pruebas": [{"entrada": [[{"categoria": "comida", "monto": 12.5}, {"categoria": "transporte", "monto": 3.2}, {"categoria": "comida", "monto": 7.5}]], "esperado": {"comida": 20.0, "transporte": 3.2}}, {"entrada": [[]], "esperado": {}}]}]},
+      {"titulo": "Mayor gasto", "explicacion": "max acepta una función key para decidir cómo comparar.", "objetivo": "mayor_gasto(gastos) devuelve el diccionario con el monto más alto, o None si la lista está vacía.", "pista": "return max(gastos, key=lambda g: g[\"monto\"]) if gastos else None",
+       "verificaciones": [{"tipo": "funcion", "archivo": "gastos.py", "funcion": "mayor_gasto", "descripcion": "Encuentra el mayor gasto", "pruebas": [{"entrada": [[{"categoria": "comida", "monto": 12.5}, {"categoria": "transporte", "monto": 3.2}]], "esperado": {"categoria": "comida", "monto": 12.5}}, {"entrada": [[]], "esperado": null}]}]},
+      {"titulo": "Presupuesto", "explicacion": "Reutiliza total() para no repetir lógica.", "objetivo": "presupuesto_restante(presupuesto, gastos) devuelve cuánto queda del presupuesto.", "pista": "return presupuesto - total(gastos)",
+       "verificaciones": [{"tipo": "funcion", "archivo": "gastos.py", "funcion": "presupuesto_restante", "descripcion": "Calcula el saldo", "pruebas": [{"entrada": [50, [{"categoria": "comida", "monto": 12.5}, {"categoria": "transporte", "monto": 3.2}, {"categoria": "comida", "monto": 7.5}]], "esperado": 26.8}]}]}
+    ],
+    "resultadoEsperado": "Un analizador de gastos que resume en qué se gasta y cuánto presupuesto queda."
+  },
+  {
+    "id": "formulario-interactivo", "titulo": "Formulario interactivo", "nivel": "intermedio", "lenguaje": "html",
+    "objetivo": "Crear un formulario accesible con validación en JavaScript.",
+    "descripcion": "Construirás un formulario de contacto y programarás la validación de correo y teléfono celular peruano.",
+    "requisitos": ["HTML básico", "Funciones en JavaScript"],
+    "conceptos": ["HTML_ESTRUCTURA", "CADENAS", "CONDICIONALES"],
+    "archivosIniciales": {
+      "index.html": "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Contacto</title>\n</head>\n<body>\n  <h1>Contacto</h1>\n\n  <ul id=\"errores\"></ul>\n  <script src=\"validacion.js\"></script>\n</body>\n</html>\n",
+      "validacion.js": "function correoValido(texto) {\n  \n}\n\nfunction telefonoValido(texto) {\n  \n}\n\nfunction validarFormulario(datos) {\n  const errores = [];\n  return errores;\n}\n"
+    },
+    "pasos": [
+      {"titulo": "Formulario accesible", "explicacion": "Cada campo necesita un label asociado con for e id para ser accesible.", "objetivo": "Agrega un form con campos nombre, correo (type=\"email\", id=\"correo\") y telefono, cada uno con su label, y un botón de envío.", "pista": "<form id=\"contacto\">\n  <label for=\"correo\">Correo</label>\n  <input type=\"email\" id=\"correo\">\n  <button type=\"submit\">Enviar</button>\n</form>",
+       "verificaciones": [{"tipo": "selector_html", "archivo": "index.html", "selector": "form input[type=email]#correo", "descripcion": "Existe el campo de correo"}, {"tipo": "selector_html", "archivo": "index.html", "selector": "label[for=correo]", "descripcion": "El campo de correo tiene label"}, {"tipo": "selector_html", "archivo": "index.html", "selector": "form button[type=submit]", "descripcion": "Existe el botón de envío"}]},
+      {"titulo": "Validar correo", "explicacion": "Validar con reglas claras evita depender de expresiones regulares complejas.", "objetivo": "correoValido devuelve true si el texto no tiene espacios, tiene exactamente una @ con texto antes, y después de la @ hay un punto que no está ni al inicio ni al final.", "pista": "const partes = texto.split(\"@\");\nif (partes.length !== 2 || !partes[0] || texto.includes(\" \")) return false;",
+       "verificaciones": [{"tipo": "funcion", "archivo": "validacion.js", "funcion": "correoValido", "descripcion": "Valida correos", "pruebas": [{"entrada": ["ana@correo.pe"], "esperado": true}, {"entrada": ["ana@correo"], "esperado": false}, {"entrada": ["ana correo@x.pe"], "esperado": false}, {"entrada": ["@x.pe"], "esperado": false}, {"entrada": ["a@b.c"], "esperado": true}, {"entrada": ["a@.pe"], "esperado": false}]}]},
+      {"titulo": "Validar teléfono", "explicacion": "Los celulares en Perú tienen 9 dígitos y empiezan con 9.", "objetivo": "telefonoValido devuelve true si el texto tiene exactamente 9 dígitos y empieza con 9.", "pista": "texto.length === 9 && texto[0] === \"9\" && [...texto].every(c => c >= \"0\" && c <= \"9\")",
+       "verificaciones": [{"tipo": "funcion", "archivo": "validacion.js", "funcion": "telefonoValido", "descripcion": "Valida celulares", "pruebas": [{"entrada": ["987654321"], "esperado": true}, {"entrada": ["887654321"], "esperado": false}, {"entrada": ["98765432"], "esperado": false}, {"entrada": ["98765432a"], "esperado": false}]}]},
+      {"titulo": "Validar todo", "explicacion": "Reunir todos los errores permite mostrarlos juntos al usuario.", "objetivo": "validarFormulario(datos) devuelve una lista de mensajes: \"El nombre es obligatorio\" si el nombre está vacío, \"El correo no es válido\" y \"El teléfono no es válido\" según corresponda, en ese orden.", "pista": "if (!datos.nombre.trim()) errores.push(\"El nombre es obligatorio\");",
+       "verificaciones": [{"tipo": "funcion", "archivo": "validacion.js", "funcion": "validarFormulario", "descripcion": "Reúne los errores", "pruebas": [{"entrada": [{"nombre": "", "correo": "x", "telefono": "987654321"}], "esperado": ["El nombre es obligatorio", "El correo no es válido"]}, {"entrada": [{"nombre": "Ana", "correo": "ana@correo.pe", "telefono": "987654321"}], "esperado": []}, {"entrada": [{"nombre": "Luis", "correo": "luis@x.pe", "telefono": "123"}], "esperado": ["El teléfono no es válido"]}]}]}
+    ],
+    "resultadoEsperado": "Un formulario accesible con validaciones probadas, listo para conectarse al evento submit."
+  }
+]
