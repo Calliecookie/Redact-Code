@@ -1,4 +1,68 @@
-# Resultados de pruebas — Redact Code V1.0
+# Resultados de pruebas — Redact Code v2.0 - Renovacion integral del IDE
+
+Fecha de ejecución: 14 de noviembre de 2026. Entorno: Linux, OpenJDK 25, Gradle 9.9.1, AGP 9.5.1, Android SDK 37. Todas las tareas se ejecutaron con `--rerun-tasks`. **No se generó ningún APK ni AAB.**
+
+## A. Pruebas automatizadas (resultados reales)
+
+| Tarea | Resultado |
+|---|---|
+| `:nucleo:test` | **53/53 superadas** (JUnit 4, JVM) |
+| `:aplicacion:compileDebugKotlin` | Superada sin errores |
+| `:aplicacion:testDebugUnitTest` | **29/29 superadas** (Robolectric y Compose UI Test en la JVM) |
+| `:aplicacion:lintDebug` | **0 errores, 4 avisos** (los mismos de V1.0: `OldTargetApi`, `ObsoleteSdkInt`, 2 × `MonochromeLauncherIcon`) |
+
+Pruebas por clase. Las clases de V1.0 se conservaron sin eliminar ninguna prueba.
+
+| Clase | Módulo | Pruebas | Novedad |
+|---|---|---|---|
+| `ValidadoresTest` | nucleo | 14 | V1.0 |
+| `RetosYProyectosTest` | nucleo | 10 | V1.0 |
+| `RevisionMentorAprendizajeTest` | nucleo | 14 | V1.0 |
+| `IdeNucleoTest` | nucleo | 7 | **V2.0** |
+| `IntegracionesTest` | nucleo | 8 | **V2.0** |
+| `BaseDatosYRepositoriosTest` | aplicacion | 9 | V1.0 |
+| `EditorYUiTest` | aplicacion | 6 | V1.0 |
+| `TemaContrasteTest` | aplicacion | 3 | **V2.0** |
+| `AjustesYExtensionesTest` | aplicacion | 8 | **V2.0** |
+| `ImportacionZipTest` | aplicacion | 3 | **V2.0** |
+
+### Qué cubren las pruebas nuevas
+
+- **`IdeNucleoTest`**: diferencias de Myers (mínimas, bloques, aplicación parcial, 3 000 líneas, caso clásico de Myers); control de versiones completo (estado, commit parcial, descarte, ramas, bloqueo al cambiar con cambios pendientes, rutas fuera del proyecto, binarios, identificador de blob igual al de Git); búsqueda global y reemplazo con grupos; coincidencia difusa; formateadores JSON, CSS, Python y HTML; símbolos y navegación; terminal real (cd acotado, tuberías, tiempo agotado, comandos internos, autocompletado).
+- **`IntegracionesTest`**: extensión `.vsix` (fragmentos, temas, contribuciones no compatibles, ruta maliciosa, expansión de fragmentos); catálogo Open VSX contra servidor simulado (búsqueda, descarga, bloqueo de servidor externo); lectura limitada; extractor ZIP con rutas peligrosas; **sincronización GitHub completa contra un servidor simulado de la API Git Data** (clonar, publicar con eliminación `sha: null`, traer, conflicto, rechazo de publicar con remoto adelantado); intérprete del agente con permisos, proveedor compatible con OpenAI y validación de la dirección del panel de Antigravity.
+- **`TemaContrasteTest`**: contraste AA (4,5:1 texto y 3:1 foco y selección) de todos los tokens y colores de sintaxis en las cuatro variantes (oscuro, claro y alto contraste de cada uno). La primera ejecución encontró 22 pares por debajo de 4,5:1 y se ajustaron los colores.
+- **`AjustesYExtensionesTest`**: valores predeterminados, persistencia y límites de más de 40 preferencias (releyendo con una instancia nueva), conjuntos de lenguajes y extensiones, restablecer ajustes conservando bienvenida y bloqueo, instalar, desactivar y desinstalar extensiones, tema de extensión, extensiones de archivo permitidas y controlador del editor sin editores.
+- **`ImportacionZipTest`**: importar ZIP con carpeta raíz, `.git` y ruta maliciosa; ZIP inválido sin proyectos huérfanos; carpetas ocultas fuera del listado y la búsqueda.
+
+### Defectos encontrados por las pruebas y corregidos
+
+| Hallazgo | Detectado por | Corrección |
+|---|---|---|
+| 22 pares de color con contraste menor a 4,5:1 | `TemaContrasteTest` | Colores ajustados |
+| `InputStream.readNBytes(int)` exige API 33 y la app admite API 26 | `lintDebug` | Lectura acotada propia (`leerLimitado`), también en `:nucleo`, donde lint no llega |
+| `listarArchivos` y la búsqueda antigua incluían archivos de carpetas ocultas (`.redact/`), que habrían salido en la paleta, en las copias y en el contexto enviado al proveedor de IA | revisión + `ImportacionZipTest` | Se omiten las carpetas ocultas |
+| Condición de carrera en una prueba de extensiones (el `StateFlow` se recompone en otro hilo) | `AjustesYExtensionesTest` | La prueba espera la condición con tiempo límite |
+| Expectativas erróneas del propio autor en 2 pruebas (hash de «hello world» y conteo de una expresión regular) | `IdeNucleoTest` | Pruebas corregidas |
+
+## B. Lo que NO se probó
+
+| Aspecto | Estado |
+|---|---|
+| Ejecución en dispositivo o emulador (Xiaomi Redmi Note 14) | **No realizada**. Toda la interfaz de V2.0 es código compilado y probado solo en la JVM |
+| Gestos y edición real en Sora (duplicar línea, mover línea, comentar, reemplazo de documento, fragmentos con cursor) | Solo se probó que el controlador no falle sin editores; **no se ejecutó sobre un editor real** |
+| Terminal en Android y consola de Python en Chaquopy | La lógica se probó con el shell de Linux y con CPython de escritorio; no en Android |
+| GitHub, Open VSX, Claude y proveedores compatibles contra servicios reales | **No se probaron**; solo servidores simulados |
+| Animaciones, rendimiento y consumo | No medidos |
+| Accesibilidad con TalkBack y tamaños de texto extremos | No verificada; solo contraste por cálculo |
+| Importar ZIP y clonar desde el selector de archivos del sistema | No probado en dispositivo (la importación se prueba con flujos de bytes) |
+| Panel web de Google Antigravity | No se abrió el panel real: la prueba requiere tu PC con el control remoto activo y tu cuenta de Google |
+
+Las pruebas B se realizan en el dispositivo desde Android Studio con **Run**. Este documento no sustituye esas pruebas.
+
+---
+
+# Resultados de pruebas — Redact Code V1.0 (histórico)
+
 
 Fecha de ejecución: 13 de noviembre de 2026. Entorno: Windows 11, JetBrains Runtime 25.0.4, Gradle 9.9.1, AGP 9.5.1.
 

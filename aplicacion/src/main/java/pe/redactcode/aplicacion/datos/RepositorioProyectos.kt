@@ -9,7 +9,13 @@ import pe.redactcode.aplicacion.nucleo.base_datos.ArchivoEntidad
 import pe.redactcode.aplicacion.nucleo.base_datos.ProyectoDao
 import pe.redactcode.aplicacion.nucleo.base_datos.ProyectoEntidad
 import pe.redactcode.aplicacion.nucleo.preferencias.OrdenArchivos
+import pe.redactcode.nucleo.github.ExtractorZip
 import pe.redactcode.nucleo.modelo.Lenguaje
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import pe.redactcode.aplicacion.nucleo.archivos.ErrorArchivo
+import java.io.File
 import pe.redactcode.nucleo.proyectos.ProyectoGuiado
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,6 +32,8 @@ enum class PlantillaProyecto(val nombreVisible: String, val lenguaje: Lenguaje) 
     VACIO("Vacío", Lenguaje.TEXTO)
 }
 
+const val LIMITE_ZIP_BYTES = 200L * 1024 * 1024
+
 object PlantillasIniciales {
     fun archivos(plantilla: PlantillaProyecto, nombre: String): Map<String, String> = when (plantilla) {
         PlantillaProyecto.PYTHON -> mapOf("main.py" to "def main():\n    print(\"Hola desde $nombre\")\n\n\nif __name__ == \"__main__\":\n    main()\n")
@@ -38,6 +46,8 @@ object PlantillasIniciales {
         PlantillaProyecto.VACIO -> mapOf("notas.txt" to "")
     }
 }
+
+data class ResumenImportacion(val archivos: Int, val omitidos: List<String>)
 
 @Singleton
 class RepositorioProyectos @Inject constructor(
@@ -94,6 +104,42 @@ class RepositorioProyectos @Inject constructor(
             archivoDao.guardar(ArchivoEntidad(proyectoId = id, rutaRelativa = ruta, lenguaje = Lenguaje.desdeNombreArchivo(ruta).name, modificadoEn = ahora))
         }
         return id
+    }
+
+    suspend fun importarZip(entrada: java.io.InputStream, nombre: String): Pair<Long, ResumenImportacion> = withContext(Dispatchers.IO) {
+        val temporal = File(archivos.temporal, "importacion_${System.nanoTime()}.zip")
+        try {
+            temporal.outputStream().use { salida ->
+                val buffer = ByteArray(16 * 1024)
+                var total = 0L
+                while (true) {
+                    val n = entrada.read(buffer)
+                    if (n < 0) break
+                    total += n
+                    if (total > LIMITE_ZIP_BYTES) throw ErrorArchivo("El ZIP supera el tamaño máximo de 200 MB")
+                    salida.write(buffer, 0, n)
+                }
+            }
+            val id = crear(nombre.removeSuffix(".zip").ifBlank { "Proyecto importado" }.take(60), "Importado desde un archivo ZIP", PlantillaProyecto.VACIO, emptyMap())
+            val proyecto = obtener(id) ?: throw ErrorArchivo("No se pudo crear el proyecto")
+            try {
+                val (extraidos, omitidos) = ExtractorZip.extraer(temporal, archivos.carpetaProyecto(proyecto.carpeta), quitarCarpetaRaiz = true)
+                if (extraidos.isEmpty()) throw ErrorArchivo("El ZIP no contiene archivos utilizables")
+                val lenguaje = when {
+                    extraidos.any { it.endsWith(".html") } -> Lenguaje.HTML
+                    extraidos.any { it.endsWith(".py") } -> Lenguaje.PYTHON
+                    extraidos.any { it.endsWith(".js") } -> Lenguaje.JAVASCRIPT
+                    else -> Lenguaje.TEXTO
+                }
+                actualizar(proyecto.copy(lenguajePrincipal = lenguaje.name))
+                id to ResumenImportacion(extraidos.size, omitidos)
+            } catch (e: Throwable) {
+                withContext(NonCancellable) { eliminarProyecto(proyecto) }
+                throw e
+            }
+        } finally {
+            temporal.delete()
+        }
     }
 
     suspend fun crearDesdeGuiado(guiado: ProyectoGuiado): Long {

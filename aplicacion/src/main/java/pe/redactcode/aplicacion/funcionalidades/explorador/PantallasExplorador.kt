@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
@@ -106,7 +107,7 @@ fun colorLenguaje(lenguaje: Lenguaje): Color {
 }
 
 @HiltViewModel
-class ProyectosViewModel @Inject constructor(private val repositorio: RepositorioProyectos) : ViewModel() {
+class ProyectosViewModel @Inject constructor(@dagger.hilt.android.qualifiers.ApplicationContext private val contexto: android.content.Context, private val repositorio: RepositorioProyectos) : ViewModel() {
     private val consulta = MutableStateFlow("")
     val textoBusqueda: StateFlow<String> = consulta.asStateFlow()
     val proyectos: StateFlow<List<ProyectoEntidad>> = combine(repositorio.proyectos, consulta) { lista, q ->
@@ -119,6 +120,20 @@ class ProyectosViewModel @Inject constructor(private val repositorio: Repositori
     fun crear(nombre: String, descripcion: String, plantilla: PlantillaProyecto, alCrear: (Long) -> Unit) {
         viewModelScope.launch {
             runCatching { repositorio.crear(nombre, descripcion, plantilla) }.onSuccess(alCrear).onFailure { mensaje.value = it.message }
+        }
+    }
+
+    fun importarZip(uri: android.net.Uri, alImportar: (Long) -> Unit) {
+        viewModelScope.launch {
+            mensaje.value = "Importando…"
+            val nombre = contexto.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "Proyecto importado"
+            runCatching {
+                val entrada = contexto.contentResolver.openInputStream(uri) ?: throw IllegalStateException("No se pudo leer el archivo")
+                entrada.use { repositorio.importarZip(it, nombre) }
+            }.onSuccess { (id, resumen) ->
+                mensaje.value = "Importados ${resumen.archivos} archivo(s)" + if (resumen.omitidos.isNotEmpty()) " · ${resumen.omitidos.size} omitido(s)" else ""
+                alImportar(id)
+            }.onFailure { mensaje.value = it.message ?: "No se pudo importar el ZIP" }
         }
     }
 
@@ -138,6 +153,7 @@ fun PantallaProyectos(alAbrirProyecto: (Long) -> Unit, vm: ProyectosViewModel = 
     var renombrar by remember { mutableStateOf<ProyectoEntidad?>(null) }
     var eliminar by remember { mutableStateOf<ProyectoEntidad?>(null) }
     LaunchedEffect(mensaje) { mensaje?.let { avisos.showSnackbar(it); vm.mensaje.value = null } }
+    val selectorZip = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { it?.let { uri -> vm.importarZip(uri, alAbrirProyecto) } }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -146,7 +162,11 @@ fun PantallaProyectos(alAbrirProyecto: (Long) -> Unit, vm: ProyectosViewModel = 
             ExtendedFloatingActionButton(onClick = { crear = true }, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary,
                 icon = { Icon(Icons.Outlined.Add, null) }, text = { Text("Nuevo proyecto") })
         },
-        topBar = { EncabezadoPantalla("Proyectos", "${proyectos.size} en este dispositivo") }
+        topBar = {
+            EncabezadoPantalla("Proyectos", "${proyectos.size} en este dispositivo") {
+                IconButton(onClick = { selectorZip.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }) { Icon(Icons.Outlined.Unarchive, "Importar proyecto desde ZIP") }
+            }
+        }
     ) { relleno ->
         LazyColumn(Modifier.fillMaxSize().padding(relleno), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { CampoTexto(busqueda, vm::buscar, "Buscar proyectos") }

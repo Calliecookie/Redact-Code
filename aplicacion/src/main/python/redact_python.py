@@ -177,6 +177,67 @@ def ejecutar(codigo, entrada, limite_segundos):
         return json.dumps(respuesta, ensure_ascii=False)
 
 
+_sesion_consola = None
+
+
+def reiniciar_consola():
+    global _sesion_consola
+    _sesion_consola = None
+    return "ok"
+
+
+def consola(codigo, limite_segundos):
+    global _sesion_consola
+    with _cerrojo_ejecucion:
+        salida = SalidaLimitada()
+        errores = SalidaLimitada()
+        inicio = time.monotonic()
+        respuesta = {"estado": "EXITO", "excepcion": None, "linea": None, "mensaje": None}
+        if _sesion_consola is None:
+            _sesion_consola = _crear_espacio(salida, "")
+            _sesion_consola["__name__"] = "__consola__"
+        try:
+            try:
+                compilado = compile(codigo, "<consola>", "eval", dont_inherit=True)
+                es_expresion = True
+            except SyntaxError:
+                compilado = compile(codigo, "<consola>", "exec", dont_inherit=True)
+                es_expresion = False
+        except SyntaxError as error:
+            return json.dumps({
+                "estado": "ERROR", "salida": "", "errores": f"{type(error).__name__}: {error.msg}",
+                "excepcion": type(error).__name__, "linea": error.lineno, "mensaje": error.msg, "duracion_ms": 0,
+            }, ensure_ascii=False)
+        espacio = _sesion_consola
+
+        def correr():
+            sys.stdout = salida
+            sys.stderr = errores
+            if es_expresion:
+                valor = eval(compilado, espacio)
+                if valor is not None:
+                    espacio["_"] = valor
+                    salida.write(repr(valor) + "\n")
+            else:
+                exec(compilado, espacio)
+
+        try:
+            _ejecutar_con_limite(correr, limite_segundos)
+        except TiempoAgotado:
+            respuesta.update(estado="TIEMPO_AGOTADO", excepcion="TiempoAgotado", mensaje=f"Superó {limite_segundos} segundos")
+        except EjecucionCancelada:
+            respuesta.update(estado="CANCELADO", mensaje="Cancelado")
+        except SystemExit:
+            pass
+        except BaseException as error:
+            errores.write(f"{type(error).__name__}: {error}\n")
+            respuesta.update(estado="ERROR", excepcion=type(error).__name__, mensaje=str(error))
+        respuesta["salida"] = salida.texto()
+        respuesta["errores"] = errores.texto() if respuesta["estado"] != "TIEMPO_AGOTADO" else (errores.texto() + respuesta["mensaje"])
+        respuesta["duracion_ms"] = int((time.monotonic() - inicio) * 1000)
+        return json.dumps(respuesta, ensure_ascii=False)
+
+
 def _serializar(valor):
     def convertir(objeto):
         if isinstance(objeto, (set, frozenset)):

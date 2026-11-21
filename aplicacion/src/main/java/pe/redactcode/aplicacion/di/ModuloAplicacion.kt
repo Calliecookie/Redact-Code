@@ -45,4 +45,8 @@ object ModuloAplicacion {
     @Singleton
     fun clienteGitHub(credenciales: AlmacenCredenciales): ClienteGitHub =
         ClienteGitHub({ credenciales.leerSincrono(AlmacenCredenciales.TOKEN_GITHUB) })
+
+    @Provides
+    @Singleton
+    fun clienteOpenVsx(): pe.redactcode.nucleo.extensiones.ClienteOpenVsx = pe.redactcode.nucleo.extensiones.ClienteOpenVsx()
 }

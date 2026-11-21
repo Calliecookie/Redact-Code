@@ -1,4 +1,4 @@
-# Guía de compilación y ejecución — Redact Code V1.0
+# Guía de compilación y ejecución — Redact Code v2.0 - Renovacion integral del IDE
 
 Esta guía explica cómo abrir el proyecto en Android Studio y ejecutarlo en tu celular con el botón **Run**. El proyecto no incluye ni genera instaladores (APK/AAB) de distribución.
 
@@ -7,7 +7,7 @@ Esta guía explica cómo abrir el proyecto en Android Studio y ejecutarlo en tu 
 | Componente | Versión usada y verificada |
 |---|---|
 | Android Studio | Versión con JetBrains Runtime 25 (la instalada en este equipo) |
-| JDK | El JBR incluido en Android Studio (no se necesita otro JDK) |
+| JDK | JDK 25 (`gradle/gradle-daemon-jvm.properties` lo exige para el daemon). El JBR 25 de Android Studio lo cumple; en Linux se instaló `openjdk-25-jdk-headless` |
 | Gradle | 9.9.1 (se descarga automáticamente con el *wrapper*) |
 | Android Gradle Plugin | 9.5.1 |
 | Kotlin | 2.4.21 (Kotlin integrado de AGP 9) |
@@ -70,3 +70,26 @@ RedactCode/
 ├── recursos_graficos/      logo original y licencia de JetBrains Mono
 └── documentacion/          esta documentación
 ```
+
+## 7. Verificación por línea de comandos sin generar APK (V2.0)
+
+Estas son las tareas usadas para verificar V2.0. Ninguna genera APK ni AAB:
+
+```
+./gradlew :nucleo:test
+./gradlew :aplicacion:compileDebugKotlin
+./gradlew :aplicacion:testDebugUnitTest
+./gradlew :aplicacion:lintDebug
+```
+
+No se ejecutaron `assembleDebug`, `bundle*` ni `installDebug`. La instalación y las pruebas en el dispositivo se hacen desde Android Studio con **Run**.
+
+Requisitos del entorno Linux de verificación: `ANDROID_HOME=/opt/android-sdk`, plataforma `android-37.0`, `build-tools;37.0.0` y un `local.properties` con `sdk.dir`. Las pruebas de Robolectric descargan un artefacto desde `gcp.mirrors.maven.org`; si tu red restringe hosts, debes permitirlo.
+
+## 8. Versión
+
+`versionName` es `2.0` y `versionCode` es 2. Ver `HISTORIAL_DE_VERSIONES.md` para la política de versiones y ramas. Las funciones pendientes y lo no verificado están en `LIMITACIONES_CONOCIDAS.md`, secciones 12 y 13.
+
+## 9. Integración continua
+
+`.github/workflows/verificacion.yml` ejecuta en GitHub Actions, en cada push a `main` o a una rama de versión (`v2`, `v2.1`, etc.) y en cada pull request, las mismas tareas de la sección 7 (sin generar APK) y publica los informes de pruebas y lint.

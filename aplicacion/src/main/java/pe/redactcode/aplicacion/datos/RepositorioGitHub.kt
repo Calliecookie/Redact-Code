@@ -11,7 +11,11 @@ import pe.redactcode.nucleo.github.ErrorGitHub
 import pe.redactcode.nucleo.github.RamaGitHub
 import pe.redactcode.nucleo.github.RepositorioGitHub as RepoGitHub
 import pe.redactcode.nucleo.github.RespuestaPublicacion
+import pe.redactcode.nucleo.github.SincronizadorGitHub
 import pe.redactcode.nucleo.modelo.Lenguaje
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,6 +74,22 @@ class RepositorioGitHub @Inject constructor(
             proyectos.guardarShaGitHub(proyecto, ruta, sha)
         }
         return proyecto.id
+    }
+
+    suspend fun clonar(repo: RepoGitHub, rama: String): Long {
+        val id = proyectos.crear(repo.name, repo.description ?: "Clonado de ${repo.nombreCompleto}", PlantillaProyecto.VACIO, emptyMap(), ProyectoEntidad.ORIGEN_GITHUB, null, repo.nombreCompleto, rama)
+        val proyecto = proyectos.obtener(id) ?: throw ErrorGitHub("No se pudo crear el proyecto")
+        try {
+            withContext(Dispatchers.IO) {
+                val raiz = proyectos.archivos.carpetaProyecto(proyecto.carpeta)
+                val temporal = java.io.File(proyectos.archivos.temporal, "clon_${System.nanoTime()}.zip")
+                SincronizadorGitHub(cliente, raiz).clonar(repo.owner.login, repo.name, rama, usuarioActual.value ?: "Redact Code", temporal)
+            }
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { proyectos.eliminarProyecto(proyecto) }
+            throw e
+        }
+        return id
     }
 
     suspend fun publicar(proyecto: ProyectoEntidad, ruta: String, mensaje: String, repositorioCompleto: String, rama: String): RespuestaPublicacion {

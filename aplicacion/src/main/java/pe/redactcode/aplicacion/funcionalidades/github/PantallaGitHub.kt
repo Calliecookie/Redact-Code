@@ -139,6 +139,14 @@ class GitHubViewModel @Inject constructor(private val repositorio: RepositorioGi
 
     fun volverRepositorios() = estado.update { it.copy(repositorio = null, contenido = emptyList(), seleccionados = emptySet()) }
 
+    fun clonar(alAbrir: (Long) -> Unit) = ejecutar {
+        val e = estado.value
+        val repo = e.repositorio ?: return@ejecutar
+        val id = repositorio.clonar(repo, e.rama ?: repo.ramaPrincipal)
+        estado.update { it.copy(mensaje = "Repositorio clonado. Sincroniza desde Control de código en el editor.") }
+        alAbrir(id)
+    }
+
     fun descargar(alAbrir: (Long) -> Unit) = ejecutar {
         val e = estado.value
         val repo = e.repositorio ?: return@ejecutar
@@ -200,8 +208,10 @@ fun PantallaGitHub(alVolver: () -> Unit, alAbrirProyecto: (Long) -> Unit, vm: Gi
                         Separador()
                     }
                 }
-                BotonPrincipal("Descargar ${estado.seleccionados.size} archivo(s) a un proyecto", { vm.descargar(alAbrirProyecto) },
-                    Modifier.fillMaxWidth().padding(20.dp), habilitado = estado.seleccionados.isNotEmpty() && !estado.cargando)
+                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BotonPrincipal("Clonar el repositorio completo", { vm.clonar(alAbrirProyecto) }, Modifier.fillMaxWidth(), habilitado = !estado.cargando)
+                    BotonSecundario("Descargar ${estado.seleccionados.size} archivo(s) seleccionados", { vm.descargar(alAbrirProyecto) }, Modifier.fillMaxWidth(), habilitado = estado.seleccionados.isNotEmpty() && !estado.cargando)
+                }
             }
         }
     }

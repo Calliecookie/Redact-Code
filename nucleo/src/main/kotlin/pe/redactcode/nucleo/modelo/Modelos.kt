@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class Lenguaje(val nombreVisible: String, val extensiones: List<String>) {
     @SerialName("python") PYTHON("Python", listOf("py")),
-    @SerialName("javascript") JAVASCRIPT("JavaScript", listOf("js")),
+    @SerialName("javascript") JAVASCRIPT("JavaScript", listOf("js", "mjs", "cjs")),
     @SerialName("html") HTML("HTML", listOf("html", "htm")),
     @SerialName("css") CSS("CSS", listOf("css")),
     @SerialName("json") JSON("JSON", listOf("json")),
@@ -16,6 +16,12 @@ enum class Lenguaje(val nombreVisible: String, val extensiones: List<String>) {
 
     companion object {
         val extensionesPermitidas: Set<String> = entries.flatMap { it.extensiones }.toSet()
+        val extensionesTextoAdicionales: Set<String> = setOf(
+            "md", "markdown", "xml", "svg", "csv", "tsv", "yml", "yaml", "toml", "ini", "cfg", "conf", "properties", "env", "log",
+            "kt", "kts", "java", "gradle", "c", "h", "cpp", "hpp", "cc", "cs", "go", "rs", "rb", "php", "swift", "dart", "lua", "r",
+            "sql", "sh", "bash", "bat", "ps1", "ts", "tsx", "jsx", "mjs", "cjs", "vue", "svelte", "scss", "sass", "less", "jsonc", "lock", "gitignore"
+        )
+        val extensionesEditables: Set<String> = extensionesPermitidas + extensionesTextoAdicionales
 
         fun desdeNombreArchivo(nombre: String): Lenguaje {
             val extension = nombre.substringAfterLast('.', "").lowercase()

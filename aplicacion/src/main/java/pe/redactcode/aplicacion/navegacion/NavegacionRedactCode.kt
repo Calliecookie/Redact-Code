@@ -1,5 +1,6 @@
 package pe.redactcode.aplicacion.navegacion
 
+import pe.redactcode.aplicacion.nucleo.diseno.anchoVentanaDp
 import android.net.Uri
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,6 +24,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
+import pe.redactcode.aplicacion.nucleo.diseno.LocalTokens
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,13 +58,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import pe.redactcode.aplicacion.datos.RepositorioPerfil
+import pe.redactcode.aplicacion.datos.RepositorioProyectos
 import pe.redactcode.aplicacion.funcionalidades.ajustes.PantallaAjustes
 import pe.redactcode.aplicacion.funcionalidades.aprendizaje.PantallaAprender
 import pe.redactcode.aplicacion.funcionalidades.aprendizaje.PantallaProgreso
 import pe.redactcode.aplicacion.funcionalidades.aprendizaje.PantallaProyectoGuiado
 import pe.redactcode.aplicacion.funcionalidades.bienvenida.PantallaBienvenida
 import pe.redactcode.aplicacion.funcionalidades.bienvenida.PantallaBloqueo
-import pe.redactcode.aplicacion.funcionalidades.editor.PantallaEditor
+import pe.redactcode.aplicacion.funcionalidades.espacio.PantallaEspacio
 import pe.redactcode.aplicacion.funcionalidades.explorador.PantallaExplorador
 import pe.redactcode.aplicacion.funcionalidades.explorador.PantallaProyectos
 import pe.redactcode.aplicacion.funcionalidades.fragmentos.PantallaEditarFragmento
@@ -147,9 +157,21 @@ private val pestanas = listOf(
     Pestana(Rutas.MAS, "Más", Icons.Outlined.MoreHoriz)
 )
 
+@HiltViewModel
+class ArranqueViewModel @Inject constructor(private val preferencias: RepositorioPreferencias, private val proyectos: RepositorioProyectos) : ViewModel() {
+    suspend fun ultimoProyecto(): Long? {
+        val p = preferencias.actuales()
+        return p.ultimoProyectoId.takeIf { p.abrirUltimoProyecto && it > 0 && proyectos.obtener(it) != null }
+    }
+}
+
 @Composable
 private fun NavegacionPrincipal(destinoInicial: String?, alConsumirDestino: () -> Unit) {
     val nav = rememberNavController()
+    val arranque: ArranqueViewModel = hiltViewModel()
+    LaunchedEffect(Unit) {
+        if (destinoInicial == null) arranque.ultimoProyecto()?.let { nav.navigate(Rutas.editor(it, null)) }
+    }
     val entrada by nav.currentBackStackEntryAsState()
     val rutaActual = entrada?.destination?.route
     LaunchedEffect(destinoInicial) {
@@ -158,41 +180,61 @@ private fun NavegacionPrincipal(destinoInicial: String?, alConsumirDestino: () -
             alConsumirDestino()
         }
     }
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            if (pestanas.any { it.ruta == rutaActual }) {
-                Column {
-                    Separador()
-                    NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = androidx.compose.ui.unit.Dp(0f)) {
-                        pestanas.forEach { p ->
-                            NavigationBarItem(
-                                selected = rutaActual == p.ruta,
-                                onClick = {
-                                    nav.navigate(p.ruta) {
-                                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = { Icon(p.icono, contentDescription = null) },
-                                label = { Text(p.etiqueta) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
-                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    indicatorColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    unselectedIconColor = LocalColoresExtendidos.current.textoTenue,
-                                    unselectedTextColor = LocalColoresExtendidos.current.textoTenue
+    val ancha = anchoVentanaDp() >= 840
+    val t = LocalTokens.current
+    val mostrarNavegacion = pestanas.any { it.ruta == rutaActual }
+    val alElegir: (Pestana) -> Unit = { p ->
+        nav.navigate(p.ruta) {
+            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+    if (ancha) {
+        Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            if (mostrarNavegacion) {
+                NavigationRail(containerColor = t.barraActividad, modifier = Modifier.statusBarsPadding()) {
+                    Spacer(Modifier.weight(1f))
+                    pestanas.forEach { p ->
+                        NavigationRailItem(
+                            selected = rutaActual == p.ruta, onClick = { alElegir(p) },
+                            icon = { Icon(p.icono, contentDescription = null) }, label = { Text(p.etiqueta) },
+                            colors = NavigationRailItemDefaults.colors(selectedIconColor = t.texto, selectedTextColor = t.texto, indicatorColor = t.seleccionLista, unselectedIconColor = t.textoTenue, unselectedTextColor = t.textoTenue)
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+            Box(Modifier.weight(1f).fillMaxSize()) { GrafoNavegacion(nav) }
+        }
+    } else {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                if (mostrarNavegacion) {
+                    Column {
+                        Separador()
+                        NavigationBar(containerColor = t.barraActividad, tonalElevation = androidx.compose.ui.unit.Dp(0f)) {
+                            pestanas.forEach { p ->
+                                NavigationBarItem(
+                                    selected = rutaActual == p.ruta,
+                                    onClick = { alElegir(p) },
+                                    icon = { Icon(p.icono, contentDescription = null) },
+                                    label = { Text(p.etiqueta) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = t.texto, selectedTextColor = t.texto, indicatorColor = t.seleccionLista,
+                                        unselectedIconColor = t.textoTenue, unselectedTextColor = t.textoTenue
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
             }
-        }
-    ) { relleno ->
-        Box(Modifier.fillMaxSize().padding(bottom = relleno.calculateBottomPadding())) {
-            GrafoNavegacion(nav)
+        ) { relleno ->
+            Box(Modifier.fillMaxSize().padding(bottom = relleno.calculateBottomPadding())) {
+                GrafoNavegacion(nav)
+            }
         }
     }
 }
@@ -211,7 +253,10 @@ private fun GrafoNavegacion(nav: NavHostController) {
                 alAbrirReto = abrirReto,
                 alVerPractica = { nav.navigate(Rutas.PRACTICA) { launchSingleTop = true } },
                 alRepasar = { nav.navigate(Rutas.REPASO) },
-                alVerProgreso = { nav.navigate(Rutas.PROGRESO) }
+                alVerProgreso = { nav.navigate(Rutas.PROGRESO) },
+                alAbrirGitHub = { nav.navigate(Rutas.GITHUB) },
+                alAbrirFragmentos = { nav.navigate(Rutas.FRAGMENTOS) },
+                alAbrirAjustes = { nav.navigate(Rutas.AJUSTES) }
             )
         }
         composable(Rutas.PROYECTOS) { PantallaProyectos(alAbrirProyecto = { nav.navigate(Rutas.explorador(it)) }) }
@@ -225,10 +270,12 @@ private fun GrafoNavegacion(nav: NavHostController) {
             Rutas.EDITOR,
             arguments = listOf(navArgument("proyectoId") { type = NavType.LongType }, navArgument("ruta") { type = NavType.StringType; defaultValue = "" })
         ) {
-            PantallaEditor(
+            PantallaEspacio(
                 alVolver = { nav.popBackStack() },
                 alAbrirMentor = { nav.navigate(Rutas.MENTOR) },
-                alPublicarGitHub = { id, ruta -> nav.navigate(Rutas.publicar(id, ruta)) }
+                alPublicarGitHub = { id, ruta -> nav.navigate(Rutas.publicar(id, ruta)) },
+                alAbrirAjustes = { nav.navigate(Rutas.AJUSTES) },
+                alAbrirGitHub = { nav.navigate(Rutas.GITHUB) }
             )
         }
         composable(Rutas.RETO, arguments = listOf(navArgument("retoId") { type = NavType.StringType })) { PantallaReto(alVolver = { nav.popBackStack() }) }

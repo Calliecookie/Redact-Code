@@ -2,6 +2,10 @@ package pe.redactcode.aplicacion
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
+import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -15,6 +19,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import pe.redactcode.aplicacion.navegacion.AccesoViewModel
 import pe.redactcode.aplicacion.navegacion.AppRedactCode
 import pe.redactcode.aplicacion.nucleo.diseno.TemaRedactCode
 import pe.redactcode.aplicacion.nucleo.preferencias.PreferenciasUsuario
@@ -26,6 +31,8 @@ class ActividadPrincipal : FragmentActivity() {
     @Inject lateinit var repositorioPreferencias: RepositorioPreferencias
 
     private val destinoSolicitado = mutableStateOf<String?>(null)
+    private val accesoViewModel: AccesoViewModel by viewModels()
+    private var instanteSegundoPlano = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -38,7 +45,8 @@ class ActividadPrincipal : FragmentActivity() {
                 modo = preferencias.modoTema,
                 escalaTexto = preferencias.escalaTexto,
                 altoContraste = preferencias.altoContraste,
-                animaciones = preferencias.animaciones
+                animaciones = preferencias.animaciones,
+                objetivosGrandes = preferencias.objetivosGrandes
             ) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     AppRedactCode(
@@ -50,6 +58,22 @@ class ActividadPrincipal : FragmentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        instanteSegundoPlano = SystemClock.elapsedRealtime()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val ausencia = SystemClock.elapsedRealtime() - instanteSegundoPlano
+        if (instanteSegundoPlano > 0 && ausencia > RETRASO_BLOQUEO_MS) {
+            lifecycleScope.launch {
+                val p = repositorioPreferencias.actuales()
+                if (p.bloqueoPin && p.bloquearAlSalir) accesoViewModel.bloquear()
+            }
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         destinoSolicitado.value = intent.getStringExtra(EXTRA_DESTINO)
@@ -57,5 +81,6 @@ class ActividadPrincipal : FragmentActivity() {
 
     companion object {
         const val EXTRA_DESTINO = "destino"
+        const val RETRASO_BLOQUEO_MS = 30_000L
     }
 }

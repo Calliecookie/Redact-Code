@@ -1,4 +1,6 @@
-# Informe técnico final — Redact Code V1.0
+# Informe técnico final — Redact Code v2.0 - Renovacion integral del IDE
+
+Las secciones 1 a 12 documentan V1.0. Las secciones 13 a 17 documentan V2.0. El estado real de V2.0 está en la sección 17.
 
 ## 1. Resumen ejecutivo
 
@@ -129,3 +131,55 @@ Ver `LIMITACIONES_CONOCIDAS.md`. Las principales: sin ejecución en dispositivo 
 ## 12. Preparación para la fase PC
 
 Interfaces en `pe.redactcode.nucleo.escritorio` (descubrimiento y emparejamiento, sincronización por instantáneas SHA-256, ejecución remota de Java/C/C++/Python/JavaScript/Kotlin, terminal y transferencia de archivos) y todo el dominio reutilizable en `:nucleo`. Ninguna función de PC aparece en la interfaz de V1.0.
+
+## 13. Alcance de V2.0 y trabajo realizado
+
+V2.0 evoluciona V1.0 hacia un IDE móvil inspirado en VS Code sin reconstruir el proyecto ni eliminar funciones: se conservaron los validadores, el mentor, los retos, los proyectos guiados, los fragmentos, la ejecución y la seguridad.
+
+| Área | Implementación |
+|---|---|
+| Interfaz | Espacio de trabajo con barra de actividad, explorador con acciones, pestañas, búsqueda global, control de código, agente, extensiones, panel inferior (problemas, salida, terminal, consola, revisión, vista previa), paleta de comandos, paneles plegables y diseño adaptable (cajón en teléfono, paneles fijos y riel en tableta). Pantalla de inicio reorganizada en bloques de trabajo y aprendizaje. |
+| Diseño | Tokens de color centralizados, temas oscuro (predeterminado) y claro renovados, alto contraste, colores semánticos y de sintaxis, contraste AA verificado por prueba automática, JetBrains Mono para código, escala de texto que respeta Android. Logo sin modificar. Animaciones de paneles, pestañas y actividad que se desactivan por ajuste. |
+| Ajustes | 16 secciones con más de 50 opciones persistentes, todas consumidas por alguna función. |
+| Editor | Búsqueda y reemplazo (archivo y proyecto), formateo (JSON, CSS y HTML reales), fragmentos con cursor, símbolos y navegación, duplicar y mover línea, comentar, comparación de archivos, guardado automático y recarga desde disco. |
+| Ejecución | Terminal de shell, consola JavaScript, consola Python con sesión, vista previa WebView y ejecución existentes. |
+| GitHub | Importar ZIP, clonar, control de versiones local con ramas, sincronización con commits de varios archivos, historial y diferencias. |
+| IA | Agente de código con proveedores Claude y compatible con OpenAI, permisos, revisión de diferencias y aceptación por archivo o bloque. |
+| Extensiones | Sistema declarativo seguro (sin ejecución de código), catálogo Open VSX, instalación, activación y desinstalación. |
+
+## 14. Investigaciones
+
+### 14.1 Google Antigravity (conexión mediante PC o servicio remoto)
+
+Conclusión: no hay integración de datos; se implementó un acceso al panel web de control remoto, que queda pendiente de probar con tu PC y tu cuenta. Hallazgos (búsqueda web del 14 de noviembre de 2026; las fuentes de terceros no se verificaron contra Google):
+
+- La documentación oficial de [Remote Control](https://antigravity.google/docs/remote-control.md) describe un proceso en segundo plano (`agy remote-control start`) accesible desde el navegador mientras la computadora anfitriona esté encendida.
+- Un [análisis de terceros](https://www.productcompass.pm/p/antigravity-remote-control) indica que cubre sesiones de la aplicación y la CLI de Antigravity y no los agentes de otros proveedores.
+- Varios hilos del [foro de Google](https://discuss.ai.google.dev/t/antigravity-2-0-remote-ssh-solution/187327) informan problemas del Agent Manager con proyectos remotos por SSH.
+- No encontré una API o SDK público documentado para controlar Antigravity desde otra aplicación.
+
+Viabilidad: una integración programática directa no es viable sin API documentada. La vía del panel web sí lo es: según la [documentación oficial](https://antigravity.google/docs/remote-control/) y [guías de terceros](https://agentsroom.dev/blog/antigravity-remote-control-from-your-phone), el panel se abre en cualquier navegador, incluido el del teléfono, con la misma cuenta de Google que la PC, y puede instalarse como aplicación web para recibir notificaciones.
+
+**Prueba de la vía del panel web**: se implementó un acceso validado que abre el panel en el navegador del teléfono (sección 12.6 de `LIMITACIONES_CONOCIDAS.md`). No se pudo abrir el panel real ni leer la documentación directamente; la prueba de extremo a extremo requiere tu PC con el control remoto activo y tu cuenta de Google.
+
+### 14.2 Extensiones de VS Code
+
+Se adoptó un modelo **declarativo y acotado**: leer de un `.vsix` solo fragmentos y temas (datos), sin ejecutar su código. Una compatibilidad amplia exigiría implementar la API de extensiones de VS Code y un entorno de ejecución de JavaScript, lo que no es viable ni seguro en esta versión; **no se promete compatibilidad universal**. Sobre el origen de los paquetes, según [fuentes secundarias](https://en.wikipedia.org/wiki/Open_VSX), el Marketplace de Visual Studio limita su uso a productos de Microsoft y [Open VSX](https://www.eclipse.org/community/eclipse_newsletter/2020/march/1.php) es una alternativa abierta, por lo que el catálogo integrado usa Open VSX. Las licencias de cada extensión las define su autor.
+
+## 15. Revisión de licencias de V2.0
+
+V2.0 **no añade dependencias**: `libs.versions.toml` y los `build.gradle.kts` no cambiaron salvo `versionCode` y `versionName`. Las licencias de la sección 9 y de `LIMITACIONES_CONOCIDAS.md` (sección 10) siguen siendo las vigentes. Open VSX es un servicio consultado por red, no se redistribuye ningún contenido suyo. Los fragmentos integrados (`FragmentosBase`) son de autoría propia.
+
+## 16. Decisiones técnicas de V2.0
+
+1. **Control de versiones propio** en lugar de incorporar una biblioteca de Git: evita una dependencia pesada (la implementación en Java sin acceso a procesos de Git es voluminosa) y permite usar la API Git Data de GitHub para commits de varios archivos. Los blobs usan SHA-1 de Git para comparar con el árbol remoto; el costo es que no es compatible con repositorios Git reales.
+2. **Fusión de tres vías por archivo** al traer, sin fusión de contenido: es predecible y nunca pierde cambios, a costa de pedir resolución manual.
+3. **Agente con JSON de archivos completos** en lugar de parches: el modelo falla menos y las diferencias se calculan localmente con el algoritmo de Myers, así que el usuario ve exactamente lo que se aplicaría.
+4. **Tokens de color únicos** y una prueba de contraste: evita que cada pantalla elija colores propios.
+5. **Comandos como fuente única** del menú y de la paleta.
+6. **Manifiestos normalizados** para extensiones: lo que se instala deja de depender del formato original.
+7. **Correcciones halladas con lint y pruebas**: `InputStream.readNBytes` (API 33) fallaría en Android 8 a 12; se reemplazó por una lectura acotada propia. `listarArchivos` y la búsqueda antigua recorrían carpetas ocultas, lo que habría expuesto `.redact/` en la paleta, en las copias y en el contexto enviado a la IA; ahora las omiten.
+
+## 17. Estado real de V2.0
+
+**v2.0** (rama `v2`, etiqueta `v2.0`). Compilación, lint (0 errores, 4 avisos) y pruebas automáticas superadas (ver `RESULTADOS_DE_PRUEBAS.md`). **Sin ninguna prueba en dispositivo.** Pendientes principales: multicursor, pliegues, formateadores reales de Python y JavaScript, resolución de conflictos y fusión de ramas, prueba real del panel de Antigravity y verificación de GitHub, Open VSX y proveedores de IA contra servicios reales.

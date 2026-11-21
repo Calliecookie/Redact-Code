@@ -36,6 +36,8 @@ import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.EditorSearcher
+import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
+import pe.redactcode.nucleo.extensiones.FragmentoExtension
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import pe.redactcode.aplicacion.R
 import pe.redactcode.aplicacion.nucleo.diseno.ColoresEditor
@@ -55,6 +57,7 @@ class ControladorEditores(private val contexto: Context) {
     private var activo: String? = null
     var alCambiarTexto: (String, String) -> Unit = { _, _ -> }
     var alMoverCursor: (PosicionCursor) -> Unit = {}
+    var fragmentos: List<FragmentoExtension> = emptyList()
 
     val editorActivo: CodeEditor? get() = activo?.let { editores[it] }
 
@@ -65,7 +68,7 @@ class ControladorEditores(private val contexto: Context) {
             return existente
         }
         val editor = CodeEditor(contexto)
-        configurar(editor, lenguaje, preferencias, colores)
+        configurar(editor, lenguaje, preferencias, colores, clave.substringAfterLast('/'))
         editor.setText(texto)
         editor.subscribeAlways(ContentChangeEvent::class.java) { evento ->
             if (evento.action != ContentChangeEvent.ACTION_SET_NEW_TEXT) alCambiarTexto(clave, editor.text.toString())
@@ -80,7 +83,7 @@ class ControladorEditores(private val contexto: Context) {
         return editor
     }
 
-    fun configurar(editor: CodeEditor, lenguaje: Lenguaje, preferencias: PreferenciasUsuario, colores: ColoresEditor) {
+    fun configurar(editor: CodeEditor, lenguaje: Lenguaje, preferencias: PreferenciasUsuario, colores: ColoresEditor, nombreArchivo: String = "") {
         val fuente = if (preferencias.fuenteEditor == FuenteEditor.JETBRAINS_MONO) {
             ResourcesCompat.getFont(contexto, R.font.jetbrains_mono_regular) ?: Typeface.MONOSPACE
         } else Typeface.MONOSPACE
@@ -90,7 +93,14 @@ class ControladorEditores(private val contexto: Context) {
         editor.tabWidth = preferencias.sangriaEspacios
         editor.setWordwrap(preferencias.ajusteLinea)
         editor.setPinLineNumber(true)
-        editor.setHighlightCurrentLine(true)
+        editor.setLineNumberEnabled(preferencias.numerosLinea)
+        editor.setHighlightCurrentLine(preferencias.resaltarLineaActual)
+        editor.setLineSpacing(0f, preferencias.interlineadoEditor)
+        editor.setLigatureEnabled(preferencias.ligaduras)
+        editor.nonPrintablePaintingFlags = if (preferencias.mostrarInvisibles) {
+            CodeEditor.FLAG_DRAW_WHITESPACE_LEADING or CodeEditor.FLAG_DRAW_WHITESPACE_INNER or CodeEditor.FLAG_DRAW_WHITESPACE_TRAILING
+        } else 0
+        runCatching { editor.getComponent(EditorAutoCompletion::class.java).isEnabled = preferencias.autocompletado }
         editor.setCursorAnimationEnabled(preferencias.animaciones)
         editor.setScalable(true)
         editor.setBlockLineEnabled(true)
@@ -98,14 +108,14 @@ class ControladorEditores(private val contexto: Context) {
         editor.props.autoIndent = true
         editor.props.deleteEmptyLineFast = false
         editor.props.highlightMatchingDelimiters = true
-        editor.props.stickyScroll = lenguaje == Lenguaje.PYTHON || lenguaje == Lenguaje.JAVASCRIPT
-        editor.setEditorLanguage(LenguajeEditor(lenguaje, preferencias.sangriaEspacios, preferencias.autocierre))
+        editor.props.stickyScroll = preferencias.stickyScroll && (lenguaje == Lenguaje.PYTHON || lenguaje == Lenguaje.JAVASCRIPT)
+        editor.setEditorLanguage(LenguajeEditor(lenguaje, preferencias.sangriaEspacios, preferencias.autocierre, preferencias.autocompletado, fragmentos, nombreArchivo))
         editor.colorScheme = esquema(colores)
         editor.contentDescription = "Editor de código ${lenguaje.nombreVisible}"
     }
 
     fun reconfigurarTodos(lenguajes: Map<String, Lenguaje>, preferencias: PreferenciasUsuario, colores: ColoresEditor) {
-        editores.forEach { (clave, editor) -> configurar(editor, lenguajes[clave] ?: Lenguaje.TEXTO, preferencias, colores) }
+        editores.forEach { (clave, editor) -> configurar(editor, lenguajes[clave] ?: Lenguaje.TEXTO, preferencias, colores, clave.substringAfterLast('/')) }
     }
 
     fun texto(clave: String): String? = editores[clave]?.text?.toString()
@@ -113,6 +123,85 @@ class ControladorEditores(private val contexto: Context) {
     fun reemplazarTexto(clave: String, texto: String) {
         editores[clave]?.setText(texto)
     }
+
+    fun reemplazarDocumento(clave: String, texto: String) {
+        val editor = editores[clave] ?: return
+        val contenido = editor.text
+        if (contenido.toString() == texto) return
+        val ultima = contenido.lineCount - 1
+        contenido.replace(0, 0, ultima, contenido.getColumnCount(ultima), texto)
+    }
+
+    fun claves(): Set<String> = editores.keys.toSet()
+
+    fun renombrarClave(anterior: String, nueva: String) {
+        val editor = editores.remove(anterior) ?: return
+        editores[nueva] = editor
+        if (activo == anterior) activo = nueva
+    }
+
+    fun duplicarLinea() {
+        val editor = editorActivo ?: return
+        val c = editor.cursor
+        val texto = editor.text
+        if (c.isSelected) {
+            val seleccion = texto.subSequence(c.left, c.right).toString()
+            texto.insert(c.rightLine, c.rightColumn, seleccion)
+        } else {
+            val linea = c.leftLine
+            texto.insert(linea, texto.getColumnCount(linea), "\n" + texto.getLineString(linea))
+        }
+    }
+
+    fun moverLinea(arriba: Boolean) {
+        val editor = editorActivo ?: return
+        val texto = editor.text
+        val linea = editor.cursor.leftLine
+        val columna = editor.cursor.leftColumn
+        val otra = if (arriba) linea - 1 else linea + 1
+        if (otra < 0 || otra >= texto.lineCount) return
+        val actual = texto.getLineString(linea)
+        val vecina = texto.getLineString(otra)
+        val primera = minOf(linea, otra)
+        val segunda = maxOf(linea, otra)
+        val nuevo = if (arriba) actual + "\n" + vecina else vecina + "\n" + actual
+        texto.replace(primera, 0, segunda, texto.getColumnCount(segunda), nuevo)
+        editor.setSelection(otra, columna.coerceAtMost(actual.length))
+    }
+
+    fun alternarComentario(lenguaje: Lenguaje) {
+        val editor = editorActivo ?: return
+        val texto = editor.text
+        val c = editor.cursor
+        val (inicio, fin) = when (lenguaje) {
+            Lenguaje.PYTHON -> "# " to ""
+            Lenguaje.JAVASCRIPT -> "// " to ""
+            Lenguaje.CSS -> "/* " to " */"
+            Lenguaje.HTML -> "<!-- " to " -->"
+            else -> return
+        }
+        val desde = c.leftLine
+        val hasta = c.rightLine
+        val lineas = (desde..hasta).map { texto.getLineString(it) }
+        val comentadas = lineas.filter { it.isNotBlank() }.all { it.trimStart().startsWith(inicio.trim()) }
+        val resultado = lineas.map { l ->
+            if (l.isBlank()) l
+            else if (comentadas) {
+                val sangria = l.takeWhile { it == ' ' || it == '\t' }
+                var cuerpo = l.drop(sangria.length).removePrefix(inicio).removePrefix(inicio.trim())
+                if (fin.isNotEmpty()) cuerpo = cuerpo.removeSuffix(fin).removeSuffix(fin.trim())
+                sangria + cuerpo
+            } else {
+                val sangria = l.takeWhile { it == ' ' || it == '\t' }
+                sangria + inicio + l.drop(sangria.length) + fin
+            }
+        }
+        texto.replace(desde, 0, hasta, texto.getColumnCount(hasta), resultado.joinToString("\n"))
+    }
+
+    fun seleccionarTodo() = editorActivo?.selectAll()
+
+    fun cursorActivo(): Pair<Int, Int>? = editorActivo?.cursor?.let { it.leftLine + 1 to it.leftColumn + 1 }
 
     fun cerrar(clave: String) {
         editores.remove(clave)?.release()

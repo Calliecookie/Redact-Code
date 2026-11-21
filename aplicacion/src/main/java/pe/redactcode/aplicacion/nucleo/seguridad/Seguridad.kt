@@ -97,6 +97,7 @@ class AlmacenCredenciales @Inject constructor(
         const val TOKEN_GITHUB = "token_github"
         const val USUARIO_GITHUB = "usuario_github"
         const val CLAVE_IA = "clave_proveedor_ia"
+        const val CLAVE_COMPATIBLE = "clave_proveedor_compatible"
         const val HASH_PIN = "hash_pin"
         const val SAL_PIN = "sal_pin"
     }

@@ -6,6 +6,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -13,11 +17,15 @@ import okhttp3.OkHttpClient
 import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
+import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 import java.io.IOException
 import java.util.Base64
 import java.util.concurrent.TimeUnit
@@ -134,6 +142,43 @@ interface ApiGitHub {
 
     @GET("repos/{dueno}/{repositorio}/pulls/{numero}/files")
     suspend fun archivosPullRequest(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Path("numero") numero: Int): List<ArchivoPullRequest>
+
+    @GET("repos/{dueno}/{repositorio}")
+    suspend fun repositorio(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String): RepositorioGitHub
+
+    @Streaming
+    @GET("repos/{dueno}/{repositorio}/zipball/{ref}")
+    suspend fun zipball(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Path(value = "ref", encoded = true) ref: String): ResponseBody
+
+    @GET("repos/{dueno}/{repositorio}/git/ref/heads/{rama}")
+    suspend fun referencia(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Path(value = "rama", encoded = true) rama: String): ReferenciaGit
+
+    @GET("repos/{dueno}/{repositorio}/git/commits/{sha}")
+    suspend fun commitGit(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Path("sha") sha: String): CommitGit
+
+    @GET("repos/{dueno}/{repositorio}/git/trees/{sha}")
+    suspend fun arbol(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Path("sha") sha: String, @Query("recursive") recursivo: Int = 1): ArbolGit
+
+    @GET("repos/{dueno}/{repositorio}/git/blobs/{sha}")
+    suspend fun blob(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Path("sha") sha: String): BlobGit
+
+    @POST("repos/{dueno}/{repositorio}/git/blobs")
+    suspend fun crearBlob(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Body cuerpo: NuevoBlob): ReferenciaSha
+
+    @POST("repos/{dueno}/{repositorio}/git/trees")
+    suspend fun crearArbol(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Body cuerpo: JsonObject): ReferenciaSha
+
+    @POST("repos/{dueno}/{repositorio}/git/commits")
+    suspend fun crearCommit(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Body cuerpo: NuevoCommit): ReferenciaSha
+
+    @PATCH("repos/{dueno}/{repositorio}/git/refs/heads/{rama}")
+    suspend fun actualizarReferencia(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Path(value = "rama", encoded = true) rama: String, @Body cuerpo: ActualizarReferencia): ReferenciaGit
+
+    @POST("repos/{dueno}/{repositorio}/git/refs")
+    suspend fun crearReferencia(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Body cuerpo: NuevaReferencia): ReferenciaGit
+
+    @GET("repos/{dueno}/{repositorio}/commits")
+    suspend fun commits(@Path("dueno") dueno: String, @Path("repositorio") repositorio: String, @Query("sha") rama: String, @Query("per_page") porPagina: Int = 30): List<ResumenCommitGitHub>
 }
 
 class ErrorGitHub(mensaje: String, val codigoHttp: Int? = null) : Exception(mensaje)
@@ -233,6 +278,76 @@ class ClienteGitHub(
     suspend fun pullRequestsAbiertos(dueno: String, repositorio: String) = llamar { pullRequests(dueno, repositorio) }
 
     suspend fun archivosDePullRequest(dueno: String, repositorio: String, numero: Int) = llamar { archivosPullRequest(dueno, repositorio, numero) }
+
+    suspend fun repositorio(dueno: String, repositorio: String): RepositorioGitHub = llamar { repositorio(dueno, repositorio) }
+
+    suspend fun descargarZip(dueno: String, repositorio: String, ref: String, destino: java.io.OutputStream, limiteBytes: Long = 200L * 1024 * 1024): Long = llamar {
+        zipball(dueno, repositorio, codificarRuta(ref)).use { cuerpo ->
+            cuerpo.byteStream().use { entrada ->
+                val buffer = ByteArray(16 * 1024)
+                var total = 0L
+                while (true) {
+                    val n = entrada.read(buffer)
+                    if (n < 0) break
+                    total += n
+                    if (total > limiteBytes) throw ErrorGitHub("El repositorio supera el tamaño máximo de descarga (${limiteBytes / (1024 * 1024)} MB)")
+                    destino.write(buffer, 0, n)
+                }
+                total
+            }
+        }
+    }
+
+    suspend fun shaRama(dueno: String, repositorio: String, rama: String): String = llamar { referencia(dueno, repositorio, codificarRuta(rama)).objeto.sha }
+
+    suspend fun arbolDeCommit(dueno: String, repositorio: String, shaCommit: String): Pair<String, ArbolGit> = llamar {
+        val c = commitGit(dueno, repositorio, shaCommit)
+        c.arbol.sha to arbol(dueno, repositorio, c.arbol.sha)
+    }
+
+    suspend fun bytesBlob(dueno: String, repositorio: String, sha: String): ByteArray = llamar {
+        val b = blob(dueno, repositorio, sha)
+        if (b.encoding != "base64") throw ErrorGitHub("Codificación de blob no admitida: ${b.encoding}")
+        Base64.getMimeDecoder().decode(b.content)
+    }
+
+    suspend fun subirBlob(dueno: String, repositorio: String, bytes: ByteArray): String = llamar {
+        crearBlob(dueno, repositorio, NuevoBlob(Base64.getEncoder().encodeToString(bytes), "base64")).sha
+    }
+
+    suspend fun nuevoArbol(dueno: String, repositorio: String, base: String?, entradas: List<EntradaNuevoArbol>): String = llamar {
+        crearArbol(dueno, repositorio, cuerpoArbol(base, entradas)).sha
+    }
+
+    suspend fun nuevoCommit(dueno: String, repositorio: String, mensaje: String, arbol: String, padres: List<String>, autor: AutorGit?): String = llamar {
+        crearCommit(dueno, repositorio, NuevoCommit(mensaje, arbol, padres, autor)).sha
+    }
+
+    suspend fun moverRama(dueno: String, repositorio: String, rama: String, sha: String): String = llamar {
+        actualizarReferencia(dueno, repositorio, codificarRuta(rama), ActualizarReferencia(sha, false)).objeto.sha
+    }
+
+    suspend fun crearRama(dueno: String, repositorio: String, rama: String, sha: String): String = llamar {
+        crearReferencia(dueno, repositorio, NuevaReferencia("refs/heads/$rama", sha)).objeto.sha
+    }
+
+    suspend fun historial(dueno: String, repositorio: String, rama: String, cantidad: Int = 30): List<ResumenCommitGitHub> = llamar { commits(dueno, repositorio, rama, cantidad) }
+
+    companion object {
+        fun cuerpoArbol(base: String?, entradas: List<EntradaNuevoArbol>): JsonObject = buildJsonObject {
+            if (base != null) put("base_tree", base)
+            put("tree", buildJsonArray {
+                entradas.forEach { e ->
+                    add(buildJsonObject {
+                        put("path", e.path)
+                        put("mode", e.mode)
+                        put("type", e.type)
+                        if (e.sha == null) put("sha", JsonNull) else put("sha", e.sha)
+                    })
+                }
+            })
+        }
+    }
 
     private fun codificarRuta(ruta: String): String =
         ruta.trim('/').split('/').joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }

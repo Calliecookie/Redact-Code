@@ -1,5 +1,6 @@
 package pe.redactcode.aplicacion.funcionalidades.inicio
 
+import pe.redactcode.aplicacion.nucleo.diseno.anchoVentanaDp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
@@ -29,6 +31,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.CollectionsBookmark
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -106,6 +112,9 @@ fun PantallaInicio(
     alVerPractica: () -> Unit,
     alRepasar: () -> Unit,
     alVerProgreso: () -> Unit,
+    alAbrirGitHub: () -> Unit,
+    alAbrirFragmentos: () -> Unit,
+    alAbrirAjustes: () -> Unit,
     vm: InicioViewModel = hiltViewModel()
 ) {
     val perfil by vm.perfil.collectAsStateWithLifecycle()
@@ -115,29 +124,20 @@ fun PantallaInicio(
     val repasos by vm.repasos.collectAsStateWithLifecycle()
     val recomendaciones by vm.recomendaciones.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.actualizar() }
-
+    val ancha = anchoVentanaDp() >= 840
     val hora = LocalTime.now().hour
     val saludo = when (hora) {
         in 5..11 -> "Buenos días"
         in 12..18 -> "Buenas tardes"
         else -> "Buenas noches"
     }
-    LazyColumn(
-        Modifier.fillMaxSize().statusBarsPadding(),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Column(Modifier.padding(bottom = 8.dp)) {
-                Text(saludo + (perfil?.nombre?.let { ", $it" } ?: ""), style = MaterialTheme.typography.headlineMedium)
-                Text("¿Qué vamos a construir hoy?", style = MaterialTheme.typography.bodyMedium, color = LocalColoresExtendidos.current.textoTenue)
-            }
-        }
+    val relleno = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp)
+    val trabajo: LazyListScope.() -> Unit = {
         item {
             val ultimo = recientes.firstOrNull()
             if (ultimo != null) {
                 Superficie(alPulsar = { alAbrirArchivo(ultimo.proyecto.id, ultimo.rutaRelativa) }) {
-                    Text("CONTINUAR", style = MaterialTheme.typography.labelSmall, color = LocalColoresExtendidos.current.acento)
+                    Text("CONTINUAR DONDE QUEDASTE", style = MaterialTheme.typography.labelSmall, color = LocalColoresExtendidos.current.acento)
                     Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -160,14 +160,40 @@ fun PantallaInicio(
                 }
             }
         }
+        item { TituloSeccion("Accesos rápidos") }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AccesoRapido(Icons.Outlined.Code, "Editor", Modifier.weight(1f), alVerProyectos)
-                AccesoRapido(Icons.Outlined.Psychology, "Mentor", Modifier.weight(1f), alAbrirMentor)
-                AccesoRapido(Icons.Outlined.Bolt, "Retos", Modifier.weight(1f), alVerPractica)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AccesoRapido(Icons.Outlined.Folder, "Proyectos", Modifier.weight(1f), alVerProyectos)
+                    AccesoRapido(Icons.Outlined.Cloud, "GitHub", Modifier.weight(1f), alAbrirGitHub)
+                    AccesoRapido(Icons.Outlined.Psychology, "Mentor", Modifier.weight(1f), alAbrirMentor)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AccesoRapido(Icons.Outlined.CollectionsBookmark, "Fragmentos", Modifier.weight(1f), alAbrirFragmentos)
+                    AccesoRapido(Icons.Outlined.Bolt, "Retos", Modifier.weight(1f), alVerPractica)
+                    AccesoRapido(Icons.Outlined.Settings, "Ajustes", Modifier.weight(1f), alAbrirAjustes)
+                }
             }
         }
-        item { TituloSeccion("Actividad", accion = "Ver progreso", alPulsarAccion = alVerProgreso) }
+        if (proyectos.isNotEmpty()) {
+            item { TituloSeccion("Proyectos recientes", accion = "Ver todos", alPulsarAccion = alVerProyectos) }
+            proyectos.take(4).forEach { p ->
+                item {
+                    Superficie(alPulsar = { alAbrirProyecto(p.id) }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(p.nombre, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(p.descripcion.ifBlank { "Sin descripción" }, style = MaterialTheme.typography.bodySmall, color = LocalColoresExtendidos.current.textoTenue, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (p.proyectoGuiadoId != null) Etiqueta("Guiado")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    val aprendizaje: LazyListScope.() -> Unit = {
+        item { TituloSeccion("Tu actividad", accion = "Ver progreso", alPulsarAccion = alVerProgreso) }
         item {
             val r = resumen
             val objetivo = perfil?.objetivoMinutosDiarios ?: 20
@@ -211,20 +237,21 @@ fun PantallaInicio(
                 }
             }
         }
-        if (proyectos.isNotEmpty()) {
-            item { TituloSeccion("Proyectos recientes", accion = "Ver todos", alPulsarAccion = alVerProyectos) }
-            proyectos.take(4).forEach { p ->
-                item {
-                    Superficie(alPulsar = { alAbrirProyecto(p.id) }) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(p.nombre, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(p.descripcion.ifBlank { "Sin descripción" }, style = MaterialTheme.typography.bodySmall, color = LocalColoresExtendidos.current.textoTenue, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            if (p.proyectoGuiadoId != null) Etiqueta("Guiado")
-                        }
-                    }
-                }
+    }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp)) {
+            Text(saludo + (perfil?.nombre?.let { ", $it" } ?: ""), style = MaterialTheme.typography.headlineMedium)
+            Text("¿Qué vamos a construir hoy?", style = MaterialTheme.typography.bodyMedium, color = LocalColoresExtendidos.current.textoTenue)
+        }
+        if (ancha) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(Modifier.weight(1f), contentPadding = relleno, verticalArrangement = Arrangement.spacedBy(12.dp), content = trabajo)
+                LazyColumn(Modifier.weight(1f), contentPadding = relleno, verticalArrangement = Arrangement.spacedBy(12.dp), content = aprendizaje)
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = relleno, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                trabajo()
+                aprendizaje()
             }
         }
     }

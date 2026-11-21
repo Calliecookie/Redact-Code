@@ -1,5 +1,11 @@
 package pe.redactcode.aplicacion.funcionalidades.editor
 
+import io.github.rosemoe.sora.lang.completion.CompletionItem
+import io.github.rosemoe.sora.lang.completion.CompletionItemKind
+import io.github.rosemoe.sora.widget.CodeEditor
+import pe.redactcode.nucleo.extensiones.FragmentoExtension
+import pe.redactcode.nucleo.extensiones.LectorExtensiones
+
 import android.os.Bundle
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.lang.Language
@@ -36,10 +42,37 @@ class AnalizadorResaltado(private val lenguaje: Lenguaje) : SimpleAnalyzeManager
     }
 }
 
+class ElementoFragmento(
+    private val fragmento: FragmentoExtension,
+    longitudPrefijo: Int,
+    private val nombreArchivo: String
+) : CompletionItem(fragmento.prefijo, fragmento.descripcion.ifBlank { fragmento.nombre }) {
+    init {
+        prefixLength = longitudPrefijo
+        kind = CompletionItemKind.Snippet
+    }
+
+    override fun performCompletion(editor: CodeEditor, texto: Content, linea: Int, columna: Int) {
+        val expandido = LectorExtensiones.expandir(fragmento.cuerpo, nombreArchivo)
+        val sangria = texto.getLineString(linea).takeWhile { it == ' ' || it == '\t' }
+        val insertar = expandido.texto.replace("\n", "\n" + sangria)
+        val saltosAntes = expandido.texto.substring(0, expandido.cursor.coerceIn(0, expandido.texto.length)).count { it == '\n' }
+        val desde = (columna - prefixLength).coerceAtLeast(0)
+        texto.delete(linea, desde, linea, columna)
+        val inicio = texto.getCharIndex(linea, desde)
+        texto.insert(linea, desde, insertar)
+        val destino = texto.indexer.getCharPosition((inicio + expandido.cursor + saltosAntes * sangria.length).coerceAtMost(texto.length))
+        editor.setSelection(destino.line, destino.column)
+    }
+}
+
 class LenguajeEditor(
     private val lenguaje: Lenguaje,
     private val tamanoSangria: Int,
-    private val autocierre: Boolean
+    private val autocierre: Boolean,
+    private val autocompletadoActivo: Boolean = true,
+    private val fragmentos: List<FragmentoExtension> = emptyList(),
+    private val nombreArchivo: String = ""
 ) : Language {
     private val analizador = AnalizadorResaltado(lenguaje)
     private val autocompletado = IdentifierAutoComplete(PalabrasClave.para(lenguaje).toTypedArray())
@@ -59,9 +92,13 @@ class LenguajeEditor(
     override fun getInterruptionLevel(): Int = Language.INTERRUPTION_LEVEL_STRONG
 
     override fun requireAutoComplete(contenido: ContentReference, posicion: CharPosition, publicador: CompletionPublisher, extras: Bundle) {
-        if (lenguaje == Lenguaje.TEXTO) return
+        if (!autocompletadoActivo) return
         val prefijo = CompletionHelper.computePrefix(contenido, posicion) { it.isLetterOrDigit() || it == '_' || it == '-' }
-        if (prefijo.length < 2) return
+        if (prefijo.isEmpty()) return
+        fragmentos.filter { (it.lenguaje == null || it.lenguaje == lenguaje.name) && it.prefijo.startsWith(prefijo, ignoreCase = true) }
+            .take(20)
+            .forEach { publicador.addItem(ElementoFragmento(it, prefijo.length, nombreArchivo)) }
+        if (lenguaje == Lenguaje.TEXTO || prefijo.length < 2) return
         val identificadores = IdentifierAutoComplete.SyncIdentifiers()
         val vistos = HashSet<String>()
         val texto = StringBuilder()

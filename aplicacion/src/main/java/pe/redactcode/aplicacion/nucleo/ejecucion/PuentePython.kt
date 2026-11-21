@@ -104,6 +104,20 @@ class PuentePython @Inject constructor(@ApplicationContext private val contexto:
         )
     }
 
+    suspend fun consola(codigo: String, limiteSegundos: Int): ResultadoEjecucion = withContext(hiloEjecucion) {
+        val r = json.decodeFromString<RespuestaEjecucionPython>(modulo().callAttr("consola", codigo, limiteSegundos).toString())
+        ResultadoEjecucion(
+            estado = runCatching { EstadoEjecucion.valueOf(r.estado) }.getOrDefault(EstadoEjecucion.ERROR),
+            salida = r.salida,
+            errores = r.errores,
+            excepcion = r.excepcion,
+            lineaExcepcion = r.linea,
+            duracionMs = r.duracion_ms
+        )
+    }
+
+    suspend fun reiniciarConsola() = withContext(hiloEjecucion) { modulo().callAttr("reiniciar_consola") }
+
     fun cancelar() {
         modulo?.callAttr("cancelar")
     }

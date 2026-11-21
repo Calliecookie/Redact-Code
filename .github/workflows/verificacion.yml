@@ -1,0 +1,68 @@
+name: Verificación
+
+on:
+  push:
+    branches: [main, "v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: verificacion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compilar-y-probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # El daemon de Gradle exige JDK 25 (gradle/gradle-daemon-jvm.properties).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      # Chaquopy compila los .py con un Python del mismo número de versión (3.13).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Pruebas de :nucleo (JUnit)
+        run: ./gradlew --stacktrace :nucleo:test
+
+      - name: Pruebas de :aplicacion (Robolectric)
+        run: ./gradlew --stacktrace :aplicacion:testDebugUnitTest
+
+      - name: Lint de Android
+        run: ./gradlew --stacktrace :aplicacion:lintDebug
+
+      - name: Resumen de pruebas
+        if: always()
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import glob, re
+          total = fallos = 0
+          print("| Suite | Pruebas | Fallos | Errores |\n|---|---|---|---|")
+          for f in sorted(glob.glob("**/build/test-results/**/TEST-*.xml", recursive=True)):
+              s = open(f, encoding="utf-8").read(2000)
+              m = re.search(r'testsuite name="([^"]+)" tests="(\d+)" skipped="\d+" failures="(\d+)" errors="(\d+)"', s)
+              if m:
+                  n, t, fa, er = m.group(1), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                  total += t; fallos += fa + er
+                  print(f"| {n.split('.')[-1]} | {t} | {fa} | {er} |")
+          print(f"\n**Total: {total} pruebas, {fallos} con fallo o error.**")
+          EOF
+
+      - name: Publicar informes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informes
+          path: |
+            **/build/reports/tests/
+            **/build/reports/lint-results-debug.html
+            **/build/test-results/
+          if-no-files-found: ignore

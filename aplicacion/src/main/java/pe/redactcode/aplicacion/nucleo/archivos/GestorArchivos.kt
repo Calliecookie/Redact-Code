@@ -31,6 +31,7 @@ class ErrorArchivo(mensaje: String) : Exception(mensaje)
 @Singleton
 class GestorArchivos @Inject constructor(@ApplicationContext private val contexto: Context) {
     val raiz: File by lazy { File(contexto.filesDir, "proyectos").apply { mkdirs() } }
+    val temporal: File by lazy { File(contexto.cacheDir, "transferencias").apply { mkdirs() } }
 
     companion object {
         const val TAMANO_MAXIMO_BYTES = 2L * 1024 * 1024
@@ -44,8 +45,8 @@ class GestorArchivos @Inject constructor(@ApplicationContext private val context
                 limpio == "." || limpio == ".." -> "Nombre no permitido"
                 limpio.any { it in caracteresProhibidos || it.isISOControl() } -> "El nombre contiene caracteres no permitidos"
                 limpio.startsWith(".") -> "El nombre no puede empezar con un punto"
-                esArchivo && limpio.substringAfterLast('.', "").lowercase() !in Lenguaje.extensionesPermitidas ->
-                    "Extensión no permitida. Usa: ${Lenguaje.extensionesPermitidas.sorted().joinToString(", ") { ".$it" }}"
+                esArchivo && limpio.substringAfterLast('.', "").lowercase() !in Lenguaje.extensionesEditables ->
+                    "Extensión no permitida. Usa una extensión de texto como .py, .js, .html, .css, .json, .txt o .md"
                 else -> null
             }
         }
@@ -114,7 +115,7 @@ class GestorArchivos @Inject constructor(@ApplicationContext private val context
 
     suspend fun listarArchivos(carpeta: String): List<String> = withContext(Dispatchers.IO) {
         val base = carpetaProyecto(carpeta)
-        base.walkTopDown().filter { it.isFile && !it.name.startsWith(".") }.map { relativa(carpeta, it) }.sorted().toList()
+        base.walkTopDown().onEnter { it == base || !it.name.startsWith(".") }.filter { it.isFile && !it.name.startsWith(".") }.map { relativa(carpeta, it) }.sorted().toList()
     }
 
     suspend fun crearArchivo(carpeta: String, carpetaPadre: String, nombre: String, contenido: String = ""): String = withContext(Dispatchers.IO) {
@@ -193,7 +194,7 @@ class GestorArchivos @Inject constructor(@ApplicationContext private val context
         if (consulta.isBlank()) return@withContext emptyList()
         val resultado = mutableListOf<CoincidenciaBusqueda>()
         val base = carpetaProyecto(carpeta)
-        for (archivo in base.walkTopDown().filter { it.isFile && !it.name.startsWith(".") }) {
+        for (archivo in base.walkTopDown().onEnter { it == base || !it.name.startsWith(".") }.filter { it.isFile && !it.name.startsWith(".") }) {
             val ruta = relativa(carpeta, archivo)
             if (archivo.name.contains(consulta, ignoreCase = true)) resultado += CoincidenciaBusqueda(ruta, 0, archivo.name, true)
             if (archivo.length() <= TAMANO_MAXIMO_BYTES) {

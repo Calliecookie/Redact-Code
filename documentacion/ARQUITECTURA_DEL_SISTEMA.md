@@ -1,4 +1,6 @@
-# Arquitectura del sistema — Redact Code V1.0
+# Arquitectura del sistema — Redact Code v2.0 - Renovacion integral del IDE
+
+Este documento describe la arquitectura de V1.0 (secciones 1 a 8) y, en la sección 9, los cambios de V2.0. Donde ambas difieren, manda la sección 9.
 
 ## 1. Visión general
 
@@ -37,7 +39,7 @@ La separación permite reutilizar `:nucleo` sin cambios en una futura aplicació
 
 - **MVVM**: cada pantalla tiene un `ViewModel` (`@HiltViewModel`) que expone `StateFlow` inmutables; la UI los observa con `collectAsStateWithLifecycle`.
 - **Navegación**: `navigation-compose` con rutas declaradas en `Rutas` (`navegacion/NavegacionRedactCode.kt`). Un `AccesoViewModel` decide si mostrar la bienvenida, el bloqueo por PIN/biometría o la navegación principal.
-- **Sistema visual**: `nucleo/diseno` define la paleta (negro #0D0D0F, #151518, gris #202024, #77777F, blanco #F5F5F7, #B8B8BE), el tema oscuro (predeterminado) y claro, tipografía de interfaz del sistema y JetBrains Mono para el código, además de componentes propios (`Superficie`, `EncabezadoPantalla`, `Etiqueta`, `BloqueCodigo`, etc.).
+- **Sistema visual**: `nucleo/diseno` define la paleta (negro #0D0D0F, #151518, gris #202024, #77777F, blanco #F5F5F7, #B8B8BE), el tema oscuro (predeterminado) y claro (en V2.0 los colores salen de `TokensTema`, ver sección 9.2), tipografía de interfaz del sistema y JetBrains Mono para el código, además de componentes propios (`Superficie`, `EncabezadoPantalla`, `Etiqueta`, `BloqueCodigo`, etc.).
 
 ## 3. Capas por responsabilidad
 
@@ -121,3 +123,48 @@ Como todo el dominio vive en `:nucleo` (JVM), una aplicación de escritorio pued
 | `preferencia` | Pares clave/valor de uso general. |
 
 Las migraciones se declaran en `MigracionesBaseDatos.TODAS` (vacía en la versión 1) y el esquema se exporta para escribir migraciones verificables en versiones futuras.
+
+## 9. Cambios de arquitectura en V2.0
+
+### 9.1 Módulo `:nucleo` (JVM puro, con pruebas JUnit)
+
+| Paquete | Contenido |
+|---|---|
+| `ide` | `Diferencias` (algoritmo de Myers, bloques y aplicación parcial de bloques), `BusquedaGlobal` (texto, mayúsculas, palabra completa, expresiones regulares, filtros glob, reemplazo con grupos), `CoincidenciaDifusa` (paleta de comandos), `Formateador`, `ExtractorSimbolos` (símbolos y navegación a definición/referencias por análisis de líneas) y `TerminalLocal` (shell del sistema acotado a la carpeta del proyecto). |
+| `control` | `ControlVersiones`: repositorio local en `.redact/` con identificadores de blob idénticos a los de Git (SHA-1 de `blob <n>\0<bytes>`), commits, ramas, estado, diferencias, descarte y cambio de rama con protección de cambios pendientes. |
+| `github` | `ClienteGitHub` ampliado con la API Git Data (blobs, árboles, commits, referencias, zipball, historial). `SincronizadorGitHub`: clonar (zipball + árbol remoto), traer (fusión de tres vías por archivo; si hay conflicto no aplica nada) y publicar (un solo commit con varios archivos, rama nueva opcional). `ExtractorZip` con protección contra rutas fuera del proyecto y límites de tamaño. |
+| `agentes` | `AgenteCodigo` (contexto acotado por permisos, instrucción de sistema, interpretación del JSON de cambios con validación de rutas, permisos y duplicados) y `ProveedorCompatibleOpenAI`. |
+| `extensiones` | `LectorExtensiones` (manifiesto propio y paquetes `.vsix`: solo fragmentos y temas; expansión de fragmentos con marcadores), `FragmentosBase` (extensión integrada) y `ClienteOpenVsx` (búsqueda y descarga). |
+
+### 9.2 Sistema de diseño centralizado
+
+`nucleo/diseno/Tema.kt` define `TokensColor` con dos instancias (`TokensTema.Oscuro`, `TokensTema.Claro`) y una variante de alto contraste. De ahí se derivan el `ColorScheme` de Material 3, los colores de sintaxis del editor (`ColoresEditor`) y los colores semánticos (éxito, advertencia, error, información, agregado, eliminado). La paleta parte de los colores del logo (azul y menta sobre azul marino) sin modificarlo. `TemaContrasteTest` verifica en las cuatro variantes (oscuro, claro y sus versiones de alto contraste) que los textos y los colores de sintaxis cumplan contraste AA (4,5:1 texto, 3:1 foco y selección). `LocalDimensiones` ofrece objetivos táctiles de 48 dp o 56 dp según el ajuste de accesibilidad.
+
+### 9.3 Espacio de trabajo (`funcionalidades/espacio`)
+
+`PantallaEspacio` reemplaza a la antigua `PantallaEditor` y se abre desde la misma ruta `editor/{proyectoId}`.
+
+- **Teléfono (< 600 dp)**: el editor ocupa todo el ancho; el panel lateral es un cajón superpuesto con la barra de actividad en su parte superior; deshacer y rehacer van junto a la barra de símbolos.
+- **Tableta (>= 600 dp)**: barra de actividad vertical, panel lateral fijo y panel inferior redimensionable. La navegación principal pasa a un riel lateral desde 840 dp.
+- **Paneles laterales**: Explorador, Buscar (global), Control de código, Agente de código y Extensiones.
+- **Panel inferior**: Problemas, Salida, Terminal, Consola (JavaScript y Python), Revisión y Vista previa web; se puede maximizar.
+- **Paleta de comandos**: archivos, comandos, símbolos (`@`) e ir a línea (`:`), con coincidencia difusa. Los comandos son la fuente única del menú de tres puntos.
+- Los eventos entre paneles y editor (renombrar, eliminar, recargar desde disco, formato) se propagan con `SharedFlow`; el controlador conserva el historial de deshacer al renombrar archivos.
+
+Cada panel tiene su `ViewModel` (`ViewModelsEspacio.kt`) que lee `proyectoId` del `SavedStateHandle`.
+
+### 9.4 Preferencias y ajustes
+
+`PreferenciasUsuario` pasa de 21 a más de 50 opciones persistidas en DataStore con límites de valores. `PantallaAjustes` presenta 16 secciones (lista y detalle en teléfono; dos paneles desde 840 dp). Los ajustes se consumen en: tema (`ActividadPrincipal`), editor (`ControladorEditores`), validación y guardado (`EditorViewModel`), explorador, terminal, agente (`FabricaProveedoresAgente`), Git (`ControlCodigoViewModel`) y arranque (`ArranqueViewModel`).
+
+### 9.5 Agentes de IA
+
+`FabricaProveedoresAgente` elige el proveedor según los ajustes y exige consentimiento explícito. `ProveedorAgenteAnthropic` usa el SDK oficial; `ProveedorCompatibleOpenAI` cubre servicios con `/chat/completions` (https, o http solo en red local). El agente nunca escribe en disco por sí mismo: devuelve una `PropuestaAgente` con diferencias por archivo y el usuario acepta o rechaza cada archivo e incluso cada bloque.
+
+### 9.6 Extensiones
+
+Modelo declarativo: una extensión aporta fragmentos y temas de color; no hay ejecución de código de terceros. Se instalan desde un archivo (`.json` propio o `.vsix`) o desde el catálogo de Open VSX. Se guardan como manifiestos normalizados en `files/extensiones/`.
+
+### 9.7 Cambios de datos
+
+No cambia el esquema de Room. El control de versiones local vive dentro de la carpeta de cada proyecto (`.redact/`), oculta del explorador y de las copias de la búsqueda.
