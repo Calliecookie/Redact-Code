@@ -17,8 +17,8 @@ import javax.inject.Inject
 @HiltAndroidApp
 class RedactCodeAplicacion : Application(), Configuration.Provider {
     @Inject lateinit var fabricaTrabajadores: HiltWorkerFactory
-    @Inject lateinit var retos: RepositorioRetos
-    @Inject lateinit var github: RepositorioGitHub
+    @Inject lateinit var retos: dagger.Lazy<RepositorioRetos>
+    @Inject lateinit var github: dagger.Lazy<RepositorioGitHub>
     @Inject lateinit var preferencias: RepositorioPreferencias
 
     val alcance = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -30,8 +30,8 @@ class RedactCodeAplicacion : Application(), Configuration.Provider {
         super.onCreate()
         TrabajadorRecordatorioRepaso.crearCanal(this)
         alcance.launch {
-            runCatching { retos.sincronizarCatalogo() }
-            runCatching { github.cargarEstado() }
+            runCatching { retos.get().sincronizarCatalogo() }
+            runCatching { github.get().cargarEstado() }
             val p = preferencias.actuales()
             if (p.recordatoriosRepaso && p.bienvenidaCompletada) TrabajadorRecordatorioRepaso.programar(this@RedactCodeAplicacion, p.horaRecordatorio)
         }

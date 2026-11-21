@@ -112,7 +112,7 @@ class ControlVersiones(
 
     private fun relativa(f: File) = f.relativeTo(raiz).invariantSeparatorsPath
 
-    private fun ignorado(ruta: String) = ruta.split('/').any { it.startsWith(".") }
+    private fun ignorado(ruta: String) = ruta.split('/').any { it.startsWith(".") || it == "node_modules" }
 
     fun archivosTrabajo(): Map<String, File> =
         raiz.walkTopDown()

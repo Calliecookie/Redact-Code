@@ -81,6 +81,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import pe.redactcode.aplicacion.nucleo.diseno.BotonSecundario
 import pe.redactcode.aplicacion.BuildConfig
 import pe.redactcode.aplicacion.datos.GestorCopiasSeguridad
 import pe.redactcode.aplicacion.datos.RepositorioExtensiones
@@ -155,8 +157,19 @@ class AjustesViewModel @Inject constructor(
     private val baseDatos: BaseDatosRedactCode,
     private val archivos: GestorArchivos,
     private val servicio: ServicioCodigo,
-    val extensiones: RepositorioExtensiones
+    val extensiones: RepositorioExtensiones,
+    private val puenteTerminal: pe.redactcode.aplicacion.funcionalidades.terminal.ServicioPuenteTerminal
 ) : ViewModel() {
+    val registroComandos = MutableStateFlow<List<pe.redactcode.nucleo.terminal.EntradaRegistro>>(emptyList())
+
+    fun cargarRegistro() {
+        viewModelScope.launch { registroComandos.value = withContext(kotlinx.coroutines.Dispatchers.IO) { puenteTerminal.registro.leer(40) } }
+    }
+
+    fun borrarRegistro() {
+        viewModelScope.launch { withContext(kotlinx.coroutines.Dispatchers.IO) { puenteTerminal.registro.borrar() }; registroComandos.value = emptyList() }
+    }
+
     val preferencias: StateFlow<PreferenciasUsuario> = repositorio.preferencias.stateIn(viewModelScope, SharingStarted.Eagerly, PreferenciasUsuario())
     val perfil: StateFlow<PerfilEntidad?> = perfiles.perfil.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val mensaje = MutableStateFlow<String?>(null)
@@ -181,13 +194,35 @@ class AjustesViewModel @Inject constructor(
         viewModelScope.launch { perfiles.actualizar(p.copy(nombre = nombre?.take(40) ?: p.nombre, nivel = nivel?.name ?: p.nivel)) }
     }
 
-    fun establecerPin(valor: String) = viewModelScope.launch {
-        runCatching { pin.establecer(valor); repositorio.bloqueoPin(true) }.onSuccess { mensaje.value = "PIN actualizado" }.onFailure { mensaje.value = it.message }
+    val tienePin: Boolean get() = pin.tienePin
+
+    suspend fun establecerPin(valor: String, pinActual: String = ""): Boolean {
+        if (!pin.esPinValido(valor)) {
+            mensaje.value = "El PIN debe tener entre 4 y 8 dígitos"
+            return false
+        }
+        if (pin.tienePin && !pin.verificar(pinActual)) return false
+        return runCatching {
+            pin.establecer(valor)
+            repositorio.bloqueoPin(true)
+        }.onSuccess {
+            mensaje.value = "PIN actualizado"
+        }.onFailure {
+            mensaje.value = it.message
+        }.isSuccess
     }
 
-    fun quitarPin() = viewModelScope.launch {
-        pin.eliminar(); repositorio.bloqueoPin(false); repositorio.bloqueoBiometrico(false); repositorio.bloquearAlSalir(false); mensaje.value = "Bloqueo desactivado"
+    suspend fun quitarPin(pinActual: String): Boolean {
+        if (!pin.verificar(pinActual)) return false
+        pin.eliminar()
+        repositorio.bloqueoPin(false)
+        repositorio.bloqueoBiometrico(false)
+        repositorio.bloquearAlSalir(false)
+        mensaje.value = "Bloqueo desactivado"
+        return true
     }
+
+    suspend fun consultarSegundosBloqueo(): Long = pin.consultarSegundosBloqueo()
 
     fun pinValido(v: String) = pin.esPinValido(v)
 
@@ -300,6 +335,7 @@ private fun FilaSeccion(s: SeccionAjustes, activa: Boolean, alPulsar: () -> Unit
 private fun ContenidoSeccion(seccion: SeccionAjustes, p: PreferenciasUsuario, vm: AjustesViewModel, alAbrirGitHub: () -> Unit, alReiniciar: () -> Unit) {
     var edicion by remember { mutableStateOf<EdicionTexto?>(null) }
     var dialogoPin by remember { mutableStateOf(false) }
+    var dialogoQuitarPin by remember { mutableStateOf(false) }
     var confirmarBorrado by remember { mutableStateOf(false) }
     var confirmarRestablecer by remember { mutableStateOf(false) }
     var confirmarIA by remember { mutableStateOf(false) }
@@ -396,7 +432,7 @@ private fun ContenidoSeccion(seccion: SeccionAjustes, p: PreferenciasUsuario, vm
                 Deslizador("Tamaño de fuente de la terminal", "${p.tamanoFuenteTerminal} sp", p.tamanoFuenteTerminal.toFloat(), 10f..22f, 11) { vm.cambiar { tamanoFuenteTerminal(it.toInt()) } }
                 TituloSeccion("Ejecución de programas", Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                 Deslizador("Tiempo máximo de un programa", "${p.limiteEjecucionSegundos} s", p.limiteEjecucionSegundos.toFloat(), 3f..60f, 56) { vm.cambiar { limiteEjecucion(it.toInt()) } }
-                Texto("La terminal ejecuta el shell de Android dentro de la carpeta del proyecto y no puede salir de ella con cd. Los comandos python y node usan los motores integrados. No es interactiva: los programas no reciben teclado.")
+                Texto("La terminal es interactiva y admite varias sesiones (PTY de Termux). Los comandos python, node y pip del puente solo trabajan con archivos del proyecto. Si la biblioteca nativa no carga, se usa la terminal simple, no interactiva.")
             }
             SeccionAjustes.LENGUAJES -> {
                 TituloSeccion("Validación por lenguaje", Modifier.padding(horizontal = 20.dp))
@@ -421,7 +457,7 @@ private fun ContenidoSeccion(seccion: SeccionAjustes, p: PreferenciasUsuario, vm
                 FilaAjuste("Modelo", p.modeloCompatible.ifBlank { "Sin configurar" }, alPulsar = { edicion = EdicionTexto("Modelo", "Identificador del modelo", p.modeloCompatible, guardar = { v -> vm.cambiar { modeloCompatible(v) } }) })
                 FilaAjuste("Clave de API", if (tieneClaveCompatible) "Configurada (cifrada)" else "Sin configurar (opcional en servidores locales)", alPulsar = { edicion = EdicionTexto("Clave del proveedor", "Clave", "", secreto = true, guardar = { vm.guardarClave(AlmacenCredenciales.CLAVE_COMPATIBLE, it) }) })
                 if (tieneClaveCompatible) FilaAjuste("Eliminar clave", null, alPulsar = { vm.eliminarClaveCompatible() })
-                Texto("Se admite https:// o una dirección de tu red local con http://. Funciona con servicios que implementan /chat/completions, incluidos servidores propios.")
+                Texto("Se admite https://, o http:// solo para localhost, 127.0.0.1 o 10.0.2.2 (emulador). Funciona con servicios que implementan /chat/completions, incluidos servidores propios.")
                 TituloSeccion("Consentimiento", Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                 FilaInterruptor(
                     "Permitir enviar código a proveedores de IA", if (p.consentimientoIA) "Consentimiento otorgado" else "Requiere tu consentimiento explícito",
@@ -439,6 +475,20 @@ private fun ContenidoSeccion(seccion: SeccionAjustes, p: PreferenciasUsuario, vm
                 FilaInterruptor("Crear archivos", null, p.agenteCrear, { v -> vm.cambiar { agenteCrear(v) } })
                 FilaInterruptor("Modificar archivos", null, p.agenteModificar, { v -> vm.cambiar { agenteModificar(v) } })
                 FilaInterruptor("Eliminar archivos", "Desactivado por seguridad", p.agenteEliminar, { v -> vm.cambiar { agenteEliminar(v) } })
+                FilaInterruptor("Proponer comandos de terminal", "Cada comando pide tu aprobación; los destructivos se bloquean", p.agenteEjecutarComandos, { v -> vm.cambiar { agenteEjecutarComandos(v) } })
+                TituloSeccion("Registro de comandos", Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                Texto("Comandos ejecutados desde el agente o la terminal asistida, con los secretos censurados. Se guarda solo en este teléfono.")
+                val registro by vm.registroComandos.collectAsStateWithLifecycle()
+                LaunchedEffect(Unit) { vm.cargarRegistro() }
+                Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BotonSecundario("Actualizar", vm::cargarRegistro)
+                    BotonSecundario("Borrar registro", vm::borrarRegistro, habilitado = registro.isNotEmpty())
+                }
+                if (registro.isEmpty()) Texto("Sin comandos registrados.")
+                registro.forEach { r ->
+                    val fecha = remember(r.fecha) { java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(r.fecha)) }
+                    FilaAjuste("$ ${r.comando}", "$fecha · ${r.origen} · riesgo ${r.riesgo.lowercase()} · código ${r.codigo}" + if (r.salida.isNotBlank()) "\n${r.salida.take(300)}" else "")
+                }
                 Deslizador("Máximo de archivos de contexto", "${p.agenteMaxArchivos}", p.agenteMaxArchivos.toFloat(), 1f..100f, 98) { vm.cambiar { agenteMaxArchivos(it.toInt()) } }
                 TituloSeccion("Google Antigravity", Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                 Texto("Redact Code no intercambia datos con Antigravity. Este acceso abre en el navegador del teléfono el panel de control remoto de Antigravity, donde ves y diriges los agentes que corren en tu PC. Requisitos: en la PC, activa el control remoto (en la app: Ajustes › App; en la CLI: /remote-control o agy --remote-control) y en el teléfono inicia sesión con la misma cuenta de Google. La PC debe estar encendida.")
@@ -463,7 +513,7 @@ private fun ContenidoSeccion(seccion: SeccionAjustes, p: PreferenciasUsuario, vm
             }
             SeccionAjustes.PRIVACIDAD -> {
                 TituloSeccion("Bloqueo", Modifier.padding(horizontal = 20.dp))
-                FilaInterruptor("Bloqueo con PIN", if (p.bloqueoPin) "Activo" else "Desactivado", p.bloqueoPin, { activo -> if (activo) dialogoPin = true else vm.quitarPin() }, Icons.Outlined.Lock)
+                FilaInterruptor("Bloqueo con PIN", if (p.bloqueoPin) "Activo" else "Desactivado", p.bloqueoPin, { activo -> if (activo) dialogoPin = true else dialogoQuitarPin = true }, Icons.Outlined.Lock)
                 if (p.bloqueoPin) {
                     FilaAjuste("Cambiar PIN", alPulsar = { dialogoPin = true })
                     FilaInterruptor("Desbloqueo biométrico", if (vm.biometria.disponible()) "Huella o rostro" else "No disponible en este dispositivo", p.bloqueoBiometrico && vm.biometria.disponible(), { v -> vm.cambiar { bloqueoBiometrico(v) } }, Icons.Outlined.Fingerprint, vm.biometria.disponible())
@@ -489,7 +539,7 @@ private fun ContenidoSeccion(seccion: SeccionAjustes, p: PreferenciasUsuario, vm
                 FilaAjuste("Python", "CPython $versionPython vía Chaquopy")
                 FilaAjuste("JavaScript", vm.motorJavaScript)
                 FilaAjuste("Conexión con PC", if (CompatibilidadEscritorio.DISPONIBLE_EN_ESTA_VERSION) "Disponible" else "Prevista para una fase posterior (no disponible en esta versión)")
-                FilaAjuste("Licencias de terceros", "Sora Editor (LGPL-2.1), Acorn (MIT), Rhino (MPL-2.0), jsoup (MIT), Chaquopy (MIT), OkHttp, Retrofit, kotlinx, AndroidX y Kotlin (Apache-2.0), SDK de Anthropic (MIT), JetBrains Mono (OFL-1.1)")
+                FilaAjuste("Licencias de terceros", "Sora Editor (LGPL-2.1), Acorn (MIT), Rhino (MPL-2.0), jsoup (MIT), Chaquopy (MIT), Termux terminal-emulator y terminal-view (Apache-2.0), OkHttp, Retrofit, kotlinx, AndroidX y Kotlin (Apache-2.0), SDK de Anthropic (MIT), JetBrains Mono (OFL-1.1)")
             }
         }
         Spacer(Modifier.height(32.dp))
@@ -517,20 +567,108 @@ private fun ContenidoSeccion(seccion: SeccionAjustes, p: PreferenciasUsuario, vm
         )
     }
     if (dialogoPin) {
+        val pedirActual = remember { vm.tienePin }
+        var actual by remember { mutableStateOf("") }
         var nuevo by remember { mutableStateOf("") }
         var confirmacion by remember { mutableStateOf("") }
+        var errorPin by remember { mutableStateOf<String?>(null) }
+        var espera by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+        val alcance = androidx.compose.runtime.rememberCoroutineScope()
+        LaunchedEffect(pedirActual) {
+            if (pedirActual) espera = vm.consultarSegundosBloqueo()
+        }
+        LaunchedEffect(espera > 0L) {
+            while (espera > 0L) {
+                kotlinx.coroutines.delay(1_000)
+                espera = vm.consultarSegundosBloqueo()
+            }
+        }
+        val mensajeError = if (espera > 0L) "Demasiados intentos. Espera $espera s." else errorPin
         AlertDialog(
             onDismissRequest = { dialogoPin = false },
-            title = { Text("Establecer PIN") },
+            title = { Text(if (pedirActual) "Cambiar PIN" else "Establecer PIN") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (pedirActual) {
+                        CampoTexto(
+                            actual,
+                            { actual = it.filter(Char::isDigit).take(8); errorPin = null },
+                            "PIN actual",
+                            error = mensajeError,
+                            opcionesTeclado = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            transformacion = PasswordVisualTransformation()
+                        )
+                    }
                     CampoTexto(nuevo, { nuevo = it.filter(Char::isDigit).take(8) }, "PIN (4 a 8 dígitos)", opcionesTeclado = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), transformacion = PasswordVisualTransformation())
                     CampoTexto(confirmacion, { confirmacion = it.filter(Char::isDigit).take(8) }, "Confirmar PIN", error = if (confirmacion.isNotEmpty() && confirmacion != nuevo) "No coincide" else null,
                         opcionesTeclado = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), transformacion = PasswordVisualTransformation())
                 }
             },
-            confirmButton = { TextButton(enabled = vm.pinValido(nuevo) && nuevo == confirmacion, onClick = { vm.establecerPin(nuevo); dialogoPin = false }) { Text("Guardar") } },
+            confirmButton = {
+                TextButton(
+                    enabled = vm.pinValido(nuevo) && nuevo == confirmacion && (!pedirActual || (actual.length >= 4 && espera == 0L)),
+                    onClick = {
+                        alcance.launch {
+                            if (vm.establecerPin(nuevo, actual)) {
+                                dialogoPin = false
+                            } else if (pedirActual) {
+                                espera = vm.consultarSegundosBloqueo()
+                                errorPin = if (espera > 0L) null else "PIN incorrecto"
+                                actual = ""
+                            }
+                        }
+                    }
+                ) { Text("Guardar") }
+            },
             dismissButton = { TextButton(onClick = { dialogoPin = false }) { Text("Cancelar") } },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    }
+    if (dialogoQuitarPin) {
+        var actual by remember { mutableStateOf("") }
+        var errorPin by remember { mutableStateOf<String?>(null) }
+        var espera by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+        val alcance = androidx.compose.runtime.rememberCoroutineScope()
+        LaunchedEffect(Unit) {
+            espera = vm.consultarSegundosBloqueo()
+        }
+        LaunchedEffect(espera > 0L) {
+            while (espera > 0L) {
+                kotlinx.coroutines.delay(1_000)
+                espera = vm.consultarSegundosBloqueo()
+            }
+        }
+        val mensajeError = if (espera > 0L) "Demasiados intentos. Espera $espera s." else errorPin
+        AlertDialog(
+            onDismissRequest = { dialogoQuitarPin = false },
+            title = { Text("Desactivar PIN") },
+            text = {
+                CampoTexto(
+                    actual,
+                    { actual = it.filter(Char::isDigit).take(8); errorPin = null },
+                    "PIN actual",
+                    error = mensajeError,
+                    opcionesTeclado = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    transformacion = PasswordVisualTransformation()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = actual.length >= 4 && espera == 0L,
+                    onClick = {
+                        alcance.launch {
+                            if (vm.quitarPin(actual)) {
+                                dialogoQuitarPin = false
+                            } else {
+                                espera = vm.consultarSegundosBloqueo()
+                                errorPin = if (espera > 0L) null else "PIN incorrecto"
+                                actual = ""
+                            }
+                        }
+                    }
+                ) { Text("Desactivar") }
+            },
+            dismissButton = { TextButton(onClick = { dialogoQuitarPin = false }) { Text("Cancelar") } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     }

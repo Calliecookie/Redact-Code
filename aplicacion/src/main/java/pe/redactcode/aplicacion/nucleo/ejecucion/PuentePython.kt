@@ -7,10 +7,12 @@ import com.chaquo.python.android.AndroidPlatform
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import pe.redactcode.nucleo.mentor.EstructuraCodigo
 import pe.redactcode.nucleo.modelo.Diagnostico
 import pe.redactcode.nucleo.modelo.EstadoEjecucion
@@ -75,6 +77,19 @@ class PuentePython @Inject constructor(@ApplicationContext private val contexto:
         }
     }
 
+    @Volatile
+    var rutaPaquetes: String? = null
+
+    fun carpetaEntorno(proyectoId: Long): java.io.File = java.io.File(contexto.filesDir, "entornos/$proyectoId/python/site-packages")
+
+    fun usarEntorno(proyectoId: Long) {
+        rutaPaquetes = carpetaEntorno(proyectoId).takeIf { it.isDirectory }?.absolutePath
+    }
+
+    private fun prepararRuta() {
+        modulo().callAttr("agregar_ruta_paquetes", rutaPaquetes.orEmpty())
+    }
+
     suspend fun version(): String = withContext(hiloAnalisis) { modulo().callAttr("version").toString() }
 
     override suspend fun validar(codigo: String): ResultadoValidacion = withContext(hiloAnalisis) {
@@ -93,6 +108,7 @@ class PuentePython @Inject constructor(@ApplicationContext private val contexto:
     }
 
     suspend fun ejecutar(codigo: String, entrada: String, limiteSegundos: Int): ResultadoEjecucion = withContext(hiloEjecucion) {
+        prepararRuta()
         val r = json.decodeFromString<RespuestaEjecucionPython>(modulo().callAttr("ejecutar", codigo, entrada, limiteSegundos).toString())
         ResultadoEjecucion(
             estado = runCatching { EstadoEjecucion.valueOf(r.estado) }.getOrDefault(EstadoEjecucion.ERROR),
@@ -105,6 +121,7 @@ class PuentePython @Inject constructor(@ApplicationContext private val contexto:
     }
 
     suspend fun consola(codigo: String, limiteSegundos: Int): ResultadoEjecucion = withContext(hiloEjecucion) {
+        prepararRuta()
         val r = json.decodeFromString<RespuestaEjecucionPython>(modulo().callAttr("consola", codigo, limiteSegundos).toString())
         ResultadoEjecucion(
             estado = runCatching { EstadoEjecucion.valueOf(r.estado) }.getOrDefault(EstadoEjecucion.ERROR),
@@ -115,6 +132,26 @@ class PuentePython @Inject constructor(@ApplicationContext private val contexto:
             duracionMs = r.duracion_ms
         )
     }
+
+    private fun moduloSesion(): PyObject {
+        modulo()
+        return Python.getInstance().getModule("redact_sesion")
+    }
+
+    suspend fun iniciarSesion(codigo: String, depurar: Boolean, puntos: List<Int>, limiteSegundos: Int): Boolean = withContext(Dispatchers.IO) {
+        prepararRuta()
+        moduloSesion().callAttr("iniciar", codigo, depurar, JsonArray(puntos.map { JsonPrimitive(it) }).toString(), limiteSegundos).toString() == "ok"
+    }
+
+    suspend fun siguienteEvento(esperaMs: Int): String = withContext(Dispatchers.IO) {
+        moduloSesion().callAttr("siguiente_evento", esperaMs).toString()
+    }
+
+    fun enviarEntrada(texto: String) { moduloSesion().callAttr("enviar_entrada", texto) }
+
+    fun comandoDepurador(nombre: String, argumento: String = "") { moduloSesion().callAttr("comando_depurador", nombre, argumento) }
+
+    fun detenerSesion() { moduloSesion().callAttr("detener") }
 
     suspend fun reiniciarConsola() = withContext(hiloEjecucion) { modulo().callAttr("reiniciar_consola") }
 

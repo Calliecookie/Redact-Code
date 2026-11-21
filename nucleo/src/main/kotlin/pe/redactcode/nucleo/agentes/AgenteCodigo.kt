@@ -3,6 +3,9 @@ package pe.redactcode.nucleo.agentes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import pe.redactcode.nucleo.terminal.ClasificadorRiesgo
+import pe.redactcode.nucleo.terminal.EvaluacionRiesgo
+import pe.redactcode.nucleo.terminal.NivelRiesgo
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -31,7 +34,8 @@ data class PermisosAgente(
     val modificarArchivos: Boolean = true,
     val eliminarArchivos: Boolean = false,
     val maxArchivos: Int = 40,
-    val maxCaracteres: Int = 120_000
+    val maxCaracteres: Int = 120_000,
+    val ejecutarComandos: Boolean = false
 )
 
 data class MensajeAgente(val rol: String, val texto: String) {
@@ -57,11 +61,21 @@ data class CambioPropuesto(
     val motivo: String
 )
 
-data class PropuestaAgente(val resumen: String, val cambios: List<CambioPropuesto>, val rechazados: List<String>, val textoOriginal: String)
+data class ComandoPropuesto(val comando: String, val motivo: String, val riesgo: EvaluacionRiesgo)
+
+data class PropuestaAgente(
+    val resumen: String,
+    val cambios: List<CambioPropuesto>,
+    val rechazados: List<String>,
+    val textoOriginal: String,
+    val comandos: List<ComandoPropuesto> = emptyList()
+)
 
 data class ContextoAgente(val texto: String, val incluidos: List<String>, val omitidos: List<String>)
 
 object AgenteCodigo {
+    const val MAXIMO_COMANDOS = 5
+    const val MAXIMO_LARGO_COMANDO = 500
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     fun sistema(p: PermisosAgente): String = buildString {
@@ -77,6 +91,14 @@ object AgenteCodigo {
         if (!p.modificarArchivos) appendLine("- No tienes permiso para modificar archivos existentes.")
         if (!p.eliminarArchivos) appendLine("- No tienes permiso para eliminar archivos.")
         if (!p.leerProyecto) appendLine("- Solo conoces el archivo activo; no supongas el contenido de otros archivos.")
+        if (p.ejecutarComandos) {
+            appendLine("Además puedes proponer comandos de terminal con el campo opcional \"comandos\": [{\"comando\": \"python main.py\", \"motivo\": \"por qué\"}].")
+            appendLine("- Los comandos NO se ejecutan solos: la usuaria revisa y aprueba cada uno. Se ejecutan sin entrada interactiva y con tiempo límite.")
+            appendLine("- Disponibles: python, node, git (init, status, add, commit, log, diff, branch, checkout), pip (install, list), ls, cat, grep, mkdir, echo.")
+            appendLine("- No propongas comandos destructivos, de red arbitraria, con sudo, ni que salgan de la carpeta del proyecto. Máximo 5 comandos.")
+        } else {
+            appendLine("- No tienes permiso para proponer comandos de terminal.")
+        }
     }
 
     fun contexto(archivos: Map<String, String>, prioridad: List<String>, p: PermisosAgente): ContextoAgente {
@@ -161,7 +183,20 @@ object AgenteCodigo {
             if (accion == AccionCambio.MODIFICAR && anterior == nuevo) return@forEach
             cambios += CambioPropuesto(ruta, accion, anterior, nuevo, Diferencias.comparar(anterior.orEmpty(), nuevo.orEmpty()), motivo)
         }
-        return PropuestaAgente(resumen.ifBlank { if (cambios.isEmpty()) "Sin cambios propuestos." else "Cambios propuestos." }, cambios, rechazados, respuesta)
+        val comandos = mutableListOf<ComandoPropuesto>()
+        ((obj["comandos"] as? JsonArray) ?: JsonArray(emptyList())).forEach { e ->
+            val c = e as? JsonObject ?: return@forEach
+            val linea = (c["comando"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+            val motivo = (c["motivo"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            if (linea.isEmpty()) return@forEach
+            if (!p.ejecutarComandos) { rechazados += "Comando '${linea.take(60)}': sin permiso para proponer comandos"; return@forEach }
+            if (linea.length > MAXIMO_LARGO_COMANDO || linea.contains('\n')) { rechazados += "Comando rechazado: demasiado largo o con varias líneas"; return@forEach }
+            if (comandos.size >= MAXIMO_COMANDOS) { rechazados += "Comando '${linea.take(60)}': se superó el máximo de $MAXIMO_COMANDOS"; return@forEach }
+            val riesgo = ClasificadorRiesgo.clasificar(linea)
+            if (riesgo.nivel == NivelRiesgo.BLOQUEADO) { rechazados += "Comando bloqueado '${linea.take(60)}': ${riesgo.motivo}"; return@forEach }
+            comandos += ComandoPropuesto(linea, motivo, riesgo)
+        }
+        return PropuestaAgente(resumen.ifBlank { if (cambios.isEmpty() && comandos.isEmpty()) "Sin cambios propuestos." else "Cambios propuestos." }, cambios, rechazados, respuesta, comandos)
     }
 }
 
@@ -180,8 +215,8 @@ class ProveedorCompatibleOpenAI(
 
     companion object {
         fun validarUrl(url: String): String? = when {
-            !url.startsWith("https://") && !Regex("^http://(localhost|127\\.0\\.0\\.1|10\\.|192\\.168\\.|172\\.(1[6-9]|2\\d|3[01])\\.)").containsMatchIn(url) ->
-                "Usa https://, o http:// solo para una dirección de tu red local"
+            !url.startsWith("https://") && !Regex("^http://(localhost|127\\.0\\.0\\.1|10\\.0\\.2\\.2)(:\\d+)?(/.*)?$").matches(url) ->
+                "Usa https://. Solo se admite http:// para localhost, 127.0.0.1 o 10.0.2.2 (emulador)."
             else -> null
         }
     }

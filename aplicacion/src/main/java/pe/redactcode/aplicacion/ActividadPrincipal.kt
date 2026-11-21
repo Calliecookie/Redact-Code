@@ -1,6 +1,19 @@
 package pe.redactcode.aplicacion
 
+import android.animation.ValueAnimator
+import android.app.UiModeManager
 import android.content.Intent
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import androidx.core.content.edit
+import android.view.animation.PathInterpolator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.unit.dp
+import pe.redactcode.aplicacion.navegacion.EstadoAcceso
+import pe.redactcode.aplicacion.nucleo.diseno.EntradaMarca
+import pe.redactcode.aplicacion.nucleo.diseno.entradaSuave
+import pe.redactcode.aplicacion.nucleo.diseno.ModoTema
 import android.os.Bundle
 import android.os.SystemClock
 import androidx.activity.viewModels
@@ -34,13 +47,38 @@ class ActividadPrincipal : FragmentActivity() {
     private val accesoViewModel: AccesoViewModel by viewModels()
     private var instanteSegundoPlano = 0L
 
+    private var tiempoAgotado = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splash = installSplashScreen()
+        val ajustesArranque = getSharedPreferences(ARCHIVO_ARRANQUE, MODE_PRIVATE)
+        val animar = EntradaMarca.debeAnimarEntrada(
+            savedInstanceState == null,
+            runCatching { ajustesArranque.getBoolean(CLAVE_ANIMACIONES, true) }.getOrDefault(true),
+            ValueAnimator.areAnimatorsEnabled()
+        )
+        Handler(Looper.getMainLooper()).postDelayed({ tiempoAgotado = true }, TIEMPO_MAXIMO_SPLASH_MS)
+        splash.setKeepOnScreenCondition { accesoViewModel.estado.value == EstadoAcceso.Cargando && !tiempoAgotado }
+        splash.setOnExitAnimationListener { proveedor ->
+            val icono = runCatching { proveedor.iconView }.getOrNull()
+            if (!animar || icono == null) {
+                proveedor.remove()
+            } else {
+                val interpolador = PathInterpolator(0.2f, 0f, 0f, 1f)
+                icono.animate().scaleX(0.92f).scaleY(0.92f).alpha(0f).setDuration(220).setInterpolator(interpolador).start()
+                proveedor.view.animate().alpha(0f).setStartDelay(40).setDuration(180).setInterpolator(interpolador)
+                    .withEndAction { proveedor.remove() }.start()
+            }
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         destinoSolicitado.value = intent?.getStringExtra(EXTRA_DESTINO)
         setContent {
             val preferencias by repositorioPreferencias.preferencias.collectAsStateWithLifecycle(initialValue = PreferenciasUsuario())
+            LaunchedEffect(preferencias.animaciones) {
+                ajustesArranque.edit { putBoolean(CLAVE_ANIMACIONES, preferencias.animaciones) }
+            }
+            LaunchedEffect(preferencias.modoTema) { aplicarModoNocturno(preferencias.modoTema) }
             TemaRedactCode(
                 modo = preferencias.modoTema,
                 escalaTexto = preferencias.escalaTexto,
@@ -49,13 +87,28 @@ class ActividadPrincipal : FragmentActivity() {
                 objetivosGrandes = preferencias.objetivosGrandes
             ) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    AppRedactCode(
-                        destinoInicial = destinoSolicitado.value,
-                        alConsumirDestino = { destinoSolicitado.value = null }
-                    )
+                    Box(Modifier.fillMaxSize().entradaSuave(animar, retardoMs = 60, duracionMs = 200, desplazamiento = 8.dp, clave = "arranque")) {
+                        AppRedactCode(
+                            destinoInicial = destinoSolicitado.value,
+                            alConsumirDestino = { destinoSolicitado.value = null }
+                        )
+                    }
                 }
             }
         }
+    }
+
+    private fun aplicarModoNocturno(modo: ModoTema) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val destino = when (modo) {
+            ModoTema.OSCURO -> UiModeManager.MODE_NIGHT_YES
+            ModoTema.CLARO -> UiModeManager.MODE_NIGHT_NO
+            ModoTema.SISTEMA -> UiModeManager.MODE_NIGHT_AUTO
+        }
+        val ajustes = getSharedPreferences(ARCHIVO_ARRANQUE, MODE_PRIVATE)
+        if (ajustes.getInt(CLAVE_MODO_NOCTURNO, -1) == destino) return
+        val gestor = getSystemService(UiModeManager::class.java) ?: return
+        if (runCatching { gestor.setApplicationNightMode(destino) }.isSuccess) ajustes.edit { putInt(CLAVE_MODO_NOCTURNO, destino) }
     }
 
     override fun onStop() {
@@ -82,5 +135,9 @@ class ActividadPrincipal : FragmentActivity() {
     companion object {
         const val EXTRA_DESTINO = "destino"
         const val RETRASO_BLOQUEO_MS = 30_000L
+        const val TIEMPO_MAXIMO_SPLASH_MS = 2_000L
+        const val ARCHIVO_ARRANQUE = "ajustes_arranque"
+        const val CLAVE_ANIMACIONES = "animaciones_cache"
+        const val CLAVE_MODO_NOCTURNO = "modo_nocturno_aplicado"
     }
 }

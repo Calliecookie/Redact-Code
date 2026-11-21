@@ -14,6 +14,7 @@ import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -313,6 +314,29 @@ class IntegracionesTest {
             assertNotNull(ProveedorCompatibleOpenAI.validarUrl("http://ejemplo.com"))
         } finally {
             servidor.shutdown()
+        }
+    }
+
+    @Test
+    fun validarUrlProveedorCompatible() {
+        val mensajeEsperado = "Usa https://. Solo se admite http:// para localhost, 127.0.0.1 o 10.0.2.2 (emulador)."
+        for (aceptada in listOf(
+            "https://x",
+            "http://localhost:11434/v1",
+            "http://127.0.0.1:8080",
+            "http://10.0.2.2:18080/v1"
+        )) {
+            assertNull(aceptada, ProveedorCompatibleOpenAI.validarUrl(aceptada))
+        }
+        for (rechazada in listOf(
+            "http://192.168.1.5",
+            "http://10.0.0.5",
+            "http://172.16.0.1",
+            "http://ejemplo.com",
+            "http://localhost.ejemplo.com",
+            "ftp://x"
+        )) {
+            assertEquals(mensajeEsperado, ProveedorCompatibleOpenAI.validarUrl(rechazada))
         }
     }
 }

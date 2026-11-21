@@ -52,6 +52,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -159,8 +164,21 @@ fun PantallaProyectos(alAbrirProyecto: (Long) -> Unit, vm: ProyectosViewModel = 
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(avisos) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = { crear = true }, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary,
-                icon = { Icon(Icons.Outlined.Add, null) }, text = { Text("Nuevo proyecto") })
+            ExtendedFloatingActionButton(
+                onClick = { crear = true },
+                modifier = Modifier.clearAndSetSemantics {
+                    contentDescription = "Nuevo proyecto"
+                    role = Role.Button
+                    onClick {
+                        crear = true
+                        true
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                icon = { Icon(Icons.Outlined.Add, null) },
+                text = { Text("Nuevo proyecto") }
+            )
         },
         topBar = {
             EncabezadoPantalla("Proyectos", "${proyectos.size} en este dispositivo") {

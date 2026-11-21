@@ -36,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
@@ -78,7 +80,7 @@ private fun SalidaLineas(lineas: List<LineaTerminal>, tamano: Int, modifier: Mod
 }
 
 @Composable
-private fun EntradaComando(
+internal fun EntradaComando(
     prefijo: String,
     habilitado: Boolean,
     tamano: Int,
@@ -86,11 +88,19 @@ private fun EntradaComando(
     descripcion: String,
     modifier: Modifier = Modifier,
     alHistorial: ((Boolean) -> String?)? = null,
-    alCompletar: ((String) -> String?)? = null
+    alCompletar: ((String) -> String?)? = null,
+    solicitarFocoAlHabilitar: Boolean = false
 ) {
     val t = LocalTokens.current
     var texto by remember { mutableStateOf("") }
     val teclado = LocalSoftwareKeyboardController.current
+    val foco = remember { FocusRequester() }
+    LaunchedEffect(habilitado, solicitarFocoAlHabilitar) {
+        if (solicitarFocoAlHabilitar && habilitado) {
+            foco.requestFocus()
+            teclado?.show()
+        }
+    }
     val estilo = TextStyle(fontFamily = FuenteMonoJetBrains, fontSize = tamano.sp, color = t.texto)
     Row(modifier.fillMaxWidth().background(t.panelInferior).padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(prefijo, style = estilo.copy(color = t.acentoSecundario), maxLines = 1)
@@ -104,7 +114,7 @@ private fun EntradaComando(
                 cursorBrush = SolidColor(t.acentoSecundario),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { val c = texto; texto = ""; alEnviar(c) }),
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = descripcion }
+                modifier = Modifier.fillMaxWidth().focusRequester(foco).semantics { contentDescription = descripcion }
             )
         }
         if (alHistorial != null) {

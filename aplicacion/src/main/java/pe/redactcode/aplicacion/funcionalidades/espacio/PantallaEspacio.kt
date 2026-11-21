@@ -18,12 +18,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -152,6 +155,7 @@ fun PantallaEspacio(
     busqueda: BusquedaEspacioViewModel = hiltViewModel(),
     control: ControlCodigoViewModel = hiltViewModel(),
     terminal: TerminalViewModel = hiltViewModel(),
+    depurador: pe.redactcode.aplicacion.funcionalidades.depuracion.DepuradorViewModel = hiltViewModel(),
     agente: AgenteViewModel = hiltViewModel(),
     extVm: ExtensionesViewModel = hiltViewModel()
 ) {
@@ -191,7 +195,7 @@ fun PantallaEspacio(
     controlador.fragmentos = fragmentos
 
     LaunchedEffect(Unit) {
-        merge(explorador.mensajes, busqueda.mensajes, control.mensajes, terminal.mensajes, agente.mensajes, extVm.mensajes).collect { texto ->
+        merge(explorador.mensajes, busqueda.mensajes, control.mensajes, terminal.mensajes, agente.mensajes, depurador.mensajes, extVm.mensajes).collect { texto ->
             alcance.launch { avisos.showSnackbar(texto) }
         }
     }
@@ -288,6 +292,11 @@ fun PantallaEspacio(
         ComandoIde("panel_problemas", "Mostrar problemas", "Ver", enMenu = true) { vm.abrirPanel(PanelEditor.PROBLEMAS) },
         ComandoIde("panel_salida", "Mostrar salida", "Ver") { vm.abrirPanel(PanelEditor.EJECUCION) },
         ComandoIde("panel_terminal", "Mostrar terminal", "Ver") { vm.abrirPanel(PanelEditor.TERMINAL) },
+        ComandoIde("panel_depuracion", "Mostrar depuración de Python", "Ver") { vm.abrirPanel(PanelEditor.DEPURACION) },
+        ComandoIde("alternar_punto", "Alternar punto de interrupción en la línea del cursor", "Herramientas", habilitado = pestana != null) {
+            val ruta = estado.activa
+            if (ruta != null) { depurador.alternarPunto(ruta, (controlador.editorActivo?.cursor?.leftLine ?: 0) + 1); vm.abrirPanel(PanelEditor.DEPURACION) }
+        },
         ComandoIde("panel_consola", "Mostrar consola JavaScript/Python", "Ver") { vm.abrirPanel(PanelEditor.CONSOLA) },
         ComandoIde("alternar_panel", "Alternar panel inferior", "Ver") { if (estado.panel == PanelEditor.NINGUNO) vm.abrirPanel(PanelEditor.PROBLEMAS) else vm.cerrarPanel() },
         ComandoIde("revisar", "Revisar calidad del código", "Herramientas", enMenu = true, habilitado = pestana != null) { vm.revisar() },
@@ -352,7 +361,7 @@ fun PantallaEspacio(
                             }
                             if (hayPanel) {
                                 PanelInferiorEspacio(
-                                    estado, vm, terminal, controlador, panelMaximizado, { panelMaximizado = !panelMaximizado },
+                                    estado, vm, terminal, depurador, controlador, panelMaximizado, { panelMaximizado = !panelMaximizado },
                                     { fraccionPanel = if (fraccionPanel < 0.5f) 0.6f else 0.3f }, alAbrirMentor,
                                     if (panelMaximizado) Modifier.weight(1f) else Modifier.height(altoPanel).animateContentSizeSi(anim)
                                 )
@@ -640,25 +649,28 @@ private fun BarraEstadoEspacio(estado: EstadoEditor, ancha: Boolean, alPulsarPro
 
 @Composable
 private fun PanelInferiorEspacio(
-    estado: EstadoEditor, vm: EditorViewModel, terminal: TerminalViewModel, controlador: ControladorEditores,
+    estado: EstadoEditor, vm: EditorViewModel, terminal: TerminalViewModel, depurador: pe.redactcode.aplicacion.funcionalidades.depuracion.DepuradorViewModel, controlador: ControladorEditores,
     maximizado: Boolean, alMaximizar: () -> Unit, alAjustarAltura: () -> Unit, alAbrirMentor: () -> Unit, modifier: Modifier
 ) {
     val t = LocalTokens.current
     val errores = estado.diagnosticosActivos.size
-    val pestanasPanel = listOf(PanelEditor.PROBLEMAS, PanelEditor.EJECUCION, PanelEditor.TERMINAL, PanelEditor.CONSOLA, PanelEditor.REVISION, PanelEditor.VISTA_PREVIA)
+    val pestanasPanel = listOf(PanelEditor.PROBLEMAS, PanelEditor.EJECUCION, PanelEditor.TERMINAL, PanelEditor.DEPURACION, PanelEditor.CONSOLA, PanelEditor.REVISION, PanelEditor.VISTA_PREVIA)
+    val usarFlow = anchoVentanaDp() >= 840
     Column(modifier.fillMaxWidth().background(t.panelInferior)) {
         HorizontalDivider(color = t.borde)
-        Row(Modifier.fillMaxWidth().height(LocalDimensiones.current.alturaFila), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-                pestanasPanel.forEach { p ->
-                    val activo = estado.panel == p
-                    Box(
-                        Modifier.height(LocalDimensiones.current.alturaFila).clickable { vm.abrirPanel(p) }.padding(horizontal = 12.dp)
-                            .semantics { contentDescription = p.titulo; selected = activo; role = androidx.compose.ui.semantics.Role.Tab },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(p.titulo + if (p == PanelEditor.PROBLEMAS && errores > 0) " ($errores)" else "", style = MaterialTheme.typography.labelLarge, color = if (activo) t.texto else t.textoTenue, fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Normal)
-                        if (activo) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp).background(t.acento))
+        Row(Modifier.fillMaxWidth().heightIn(min = LocalDimensiones.current.alturaFila), verticalAlignment = Alignment.CenterVertically) {
+            if (usarFlow) {
+                FlowRow(Modifier.weight(1f), verticalArrangement = Arrangement.Top) {
+                    pestanasPanel.forEach { p ->
+                        val etiqueta = p.titulo + if (p == PanelEditor.PROBLEMAS && errores > 0) " ($errores)" else ""
+                        PestanaPanelInferior(p.titulo, etiqueta, estado.panel == p) { vm.abrirPanel(p) }
+                    }
+                }
+            } else {
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                    pestanasPanel.forEach { p ->
+                        val etiqueta = p.titulo + if (p == PanelEditor.PROBLEMAS && errores > 0) " ($errores)" else ""
+                        PestanaPanelInferior(p.titulo, etiqueta, estado.panel == p) { vm.abrirPanel(p) }
                     }
                 }
             }
@@ -685,7 +697,13 @@ private fun PanelInferiorEspacio(
                     modifier = Modifier.fillMaxSize()
                 )
                 PanelEditor.EJECUCION -> PanelEjecucion(estado.resultado, estado.ejecutando, estado.entradaPrograma, estado.pestanaActiva?.lenguaje == Lenguaje.PYTHON, vm::cambiarEntrada, irA, Modifier.fillMaxSize())
-                PanelEditor.TERMINAL -> PanelTerminal(terminal)
+                PanelEditor.TERMINAL -> pe.redactcode.aplicacion.funcionalidades.terminal.PanelTerminalProfesional(terminal)
+                PanelEditor.DEPURACION -> pe.redactcode.aplicacion.funcionalidades.depuracion.PanelDepuracion(
+                    depurador, estado.activa, estado.pestanaActiva?.lenguaje,
+                    textoActivo = { estado.pestanaActiva?.textoActual.orEmpty() },
+                    lineaCursor = { (controlador.editorActivo?.cursor?.leftLine ?: 0) + 1 },
+                    alIrALinea = irA
+                )
                 PanelEditor.CONSOLA -> PanelConsola(terminal)
                 PanelEditor.REVISION -> PanelRevision(estado.revision, estado.revisando, irA, Modifier.fillMaxSize())
                 PanelEditor.VISTA_PREVIA -> {
@@ -710,5 +728,29 @@ private fun PanelInferiorEspacio(
                 PanelEditor.NINGUNO -> Unit
             }
         }
+    }
+}
+
+@Composable
+private fun PestanaPanelInferior(titulo: String, etiqueta: String, activo: Boolean, alPulsar: () -> Unit) {
+    val t = LocalTokens.current
+    Box(
+        Modifier
+            .width(IntrinsicSize.Max)
+            .height(LocalDimensiones.current.alturaFila)
+            .clickable(onClick = alPulsar)
+            .padding(horizontal = 12.dp)
+            .semantics { contentDescription = titulo; selected = activo; role = androidx.compose.ui.semantics.Role.Tab },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            etiqueta,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (activo) t.texto else t.textoTenue,
+            fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            softWrap = false
+        )
+        if (activo) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp).background(t.acento))
     }
 }

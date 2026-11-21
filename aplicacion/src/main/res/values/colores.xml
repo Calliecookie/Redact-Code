@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="negro_profundo">#0F131A</color>
-    <color name="fondo_icono">#1C1D23</color>
+    <color name="fondo_icono">#112036</color>
+    <color name="fondo_ventana">#F6F8FA</color>
 </resources>

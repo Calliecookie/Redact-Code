@@ -88,6 +88,6 @@ class FabricaProveedoresAgente @Inject constructor(
 
     suspend fun permisos(): PermisosAgente {
         val p = preferencias.actuales()
-        return PermisosAgente(p.agenteLeerProyecto, p.agenteCrear, p.agenteModificar, p.agenteEliminar, p.agenteMaxArchivos)
+        return PermisosAgente(p.agenteLeerProyecto, p.agenteCrear, p.agenteModificar, p.agenteEliminar, p.agenteMaxArchivos, ejecutarComandos = p.agenteEjecutarComandos)
     }
 }

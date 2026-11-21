@@ -93,3 +93,8 @@ Requisitos del entorno Linux de verificación: `ANDROID_HOME=/opt/android-sdk`, 
 ## 9. Integración continua
 
 `.github/workflows/verificacion.yml` ejecuta en GitHub Actions, en cada push a `main` o a una rama de versión (`v2`, `v2.1`, etc.) y en cada pull request, las mismas tareas de la sección 7 (sin generar APK) y publica los informes de pruebas y lint.
+
+
+## V2.5: repositorio JitPack
+
+`settings.gradle.kts` añade `https://jitpack.io` restringido al grupo `com.github.termux.termux-app`. Se necesita acceso a `jitpack.io` al resolver dependencias. Tareas de verificación (sin generar paquetes): `:nucleo:compileKotlin`, `:nucleo:compileTestKotlin`, `:aplicacion:compileDebugKotlin`, `:nucleo:test`, `:aplicacion:testDebugUnitTest`, `:aplicacion:lintDebug`. Pruebas de Python de escritorio: `python3 -I aplicacion/src/test/python/test_redact_python.py` y `python3 -I aplicacion/src/test/python/test_redact_sesion.py`. Derivados del logotipo: `python3 recursos_graficos/derivar_logo.py` (requiere Pillow).

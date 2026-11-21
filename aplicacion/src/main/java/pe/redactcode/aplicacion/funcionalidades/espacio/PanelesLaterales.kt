@@ -90,6 +90,8 @@ import pe.redactcode.aplicacion.nucleo.diseno.LocalDimensiones
 import pe.redactcode.aplicacion.nucleo.diseno.LocalTokens
 import pe.redactcode.aplicacion.nucleo.diseno.PuntoEstado
 import pe.redactcode.nucleo.agentes.AccionCambio
+import pe.redactcode.nucleo.terminal.NivelRiesgo
+import androidx.compose.material.icons.outlined.PlayArrow
 import pe.redactcode.nucleo.control.CambioTrabajo
 import pe.redactcode.nucleo.control.ControlVersiones
 import pe.redactcode.nucleo.control.DiferenciaArchivo
@@ -541,6 +543,25 @@ fun PanelAgente(
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Etiqueta("Revisar diferencias", alPulsar = { dialogoDiff = c.ruta; if (c.ruta !in bloques) bloques[c.ruta] = c.diferencias.bloques.indices.toSet() })
                             if (c.accion == AccionCambio.MODIFICAR && c.ruta in bloques && bloques.getValue(c.ruta).size != c.diferencias.bloques.size) Etiqueta("Parcial: ${bloques.getValue(c.ruta).size}/${c.diferencias.bloques.size} bloques")
+                        }
+                    }
+                }
+                p.comandos.filter { it.comando !in estado.comandosDescartados }.forEach { c ->
+                    val resultado = estado.resultadosComandos[c.comando]
+                    val colorRiesgo = when (c.riesgo.nivel) { NivelRiesgo.BAJO -> t.exito; NivelRiesgo.MEDIO -> t.informacion; else -> t.advertencia }
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(t.superficieElevada).padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("$ ${c.comando}", style = MaterialTheme.typography.labelLarge.copy(fontFamily = FuenteMonoJetBrains))
+                        Text("Riesgo ${c.riesgo.nivel.name.lowercase()}: ${c.riesgo.motivo}", style = MaterialTheme.typography.labelSmall, color = colorRiesgo)
+                        if (c.motivo.isNotBlank()) Text(c.motivo, style = MaterialTheme.typography.labelSmall, color = t.textoTenue)
+                        if (resultado == null) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (estado.comandoEnCurso == c.comando) BotonSecundario("Detener", vm::cancelarComando, Modifier.weight(1f))
+                                else BotonPrincipal("Ejecutar", { vm.ejecutarComando(c.comando) }, Modifier.weight(1f), habilitado = estado.comandoEnCurso == null, icono = Icons.Outlined.PlayArrow)
+                                BotonSecundario("Descartar", { vm.descartarComando(c.comando) }, Modifier.weight(1f))
+                            }
+                        } else {
+                            Text("Código de salida ${resultado.codigo}", style = MaterialTheme.typography.labelSmall, color = if (resultado.codigo == 0) t.exito else t.error)
+                            Text(resultado.salida.take(2000), style = MaterialTheme.typography.bodySmall.copy(fontFamily = FuenteMonoJetBrains), color = t.texto)
                         }
                     }
                 }

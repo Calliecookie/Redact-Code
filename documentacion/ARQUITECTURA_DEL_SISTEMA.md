@@ -159,7 +159,7 @@ Cada panel tiene su `ViewModel` (`ViewModelsEspacio.kt`) que lee `proyectoId` de
 
 ### 9.5 Agentes de IA
 
-`FabricaProveedoresAgente` elige el proveedor según los ajustes y exige consentimiento explícito. `ProveedorAgenteAnthropic` usa el SDK oficial; `ProveedorCompatibleOpenAI` cubre servicios con `/chat/completions` (https, o http solo en red local). El agente nunca escribe en disco por sí mismo: devuelve una `PropuestaAgente` con diferencias por archivo y el usuario acepta o rechaza cada archivo e incluso cada bloque.
+`FabricaProveedoresAgente` elige el proveedor según los ajustes y exige consentimiento explícito. `ProveedorAgenteAnthropic` usa el SDK oficial; `ProveedorCompatibleOpenAI` cubre servicios con `/chat/completions` (https, o http solo para localhost, 127.0.0.1 y 10.0.2.2). El agente nunca escribe en disco por sí mismo: devuelve una `PropuestaAgente` con diferencias por archivo y el usuario acepta o rechaza cada archivo e incluso cada bloque.
 
 ### 9.6 Extensiones
 
@@ -168,3 +168,14 @@ Modelo declarativo: una extensión aporta fragmentos y temas de color; no hay ej
 ### 9.7 Cambios de datos
 
 No cambia el esquema de Room. El control de versiones local vive dentro de la carpeta de cada proyecto (`.redact/`), oculta del explorador y de las copias de la búsqueda.
+
+
+## 10. Cambios de v2.5
+
+- **Terminal** (`aplicacion/.../funcionalidades/terminal/`): `GestorSesionesTerminal` (singleton, hasta 8 sesiones por proyecto) crea `SesionPty` sobre `TerminalSession` de Termux; `VistaTerminal` envuelve `TerminalView`; `TeclasExtra`, `PaletaAnsi` (16 colores desde `TokensColor`) y `PanelTerminalProfesional`. `TerminalLocal` (v2.0) queda como respaldo y como ejecutor no interactivo.
+- **Puente** (`nucleo/.../terminal/Puente.kt`): `PuenteComandos.generarScript()` produce las funciones de shell; `ServidorPuente` atiende solicitudes por archivos y rechaza directorios fuera del proyecto (código 126). `ServicioPuenteTerminal` (app) enlaza `python`/`node` con `ServicioCodigo`, `git` con `ComandoGit` y `pip` con `InstaladorPip`.
+- **Núcleo**: `ComandoGit` (sobre `ControlVersiones`), `Pep440`/`InstaladorPip`, `ClasificadorRiesgo`, `CensorSecretos`, `RegistroEjecuciones`; el contrato del agente admite `comandos` (`ComandoPropuesto`).
+- **Identidad visual**: `EntradaMarca`/`entradaSuave`, splash con `fondo_ventana` claro y oscuro, `UiModeManager` y animación de salida en `ActividadPrincipal`.
+- **Ejecución interactiva y depuración**: `redact_sesion.py` (Chaquopy) corre el programa en un hilo con colas de eventos, entrada y comandos; `bdb` para depurar y un vigilante con excepción asíncrona para el tiempo límite (sin contar esperas). `PuentePython` expone `iniciarSesion`, `siguienteEvento`, `enviarEntrada`, `comandoDepurador`; `ReductorSesion` y `PuntosInterrupcion` (núcleo) modelan el estado; `DepuradorViewModel` y `PanelDepuracion` (app) lo muestran.
+- **npm**: `InstaladorNpm` (registro público, semver propio, extractor tar.gz con protección de rutas) en el núcleo; `ServicioPuenteTerminal` lo expone como `npm`.
+- **git remoto**: `ComandoGit` recibe `AccionesRemotasGit`; la app las implementa con `RepositorioGitHub.clonar` y `SincronizadorGitHub.traer/publicar`.

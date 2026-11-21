@@ -17,10 +17,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -212,17 +215,44 @@ fun EstadoVacio(icono: ImageVector, titulo: String, descripcion: String, modifie
 @Composable
 fun Etiqueta(texto: String, modifier: Modifier = Modifier, color: Color = LocalColoresExtendidos.current.textoTenue, seleccionada: Boolean = false, alPulsar: (() -> Unit)? = null) {
     val forma = RoundedCornerShape(8.dp)
-    Text(
-        texto,
-        style = MaterialTheme.typography.labelMedium,
-        color = if (seleccionada) MaterialTheme.colorScheme.onPrimary else color,
-        maxLines = 1,
+    Box(
         modifier = modifier
             .clip(forma)
             .background(if (seleccionada) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh)
-            .then(if (alPulsar != null) Modifier.clickable(onClick = alPulsar) else Modifier)
+            .then(
+                if (alPulsar != null) {
+                    Modifier.selectable(selected = seleccionada, role = Role.Tab, onClick = alPulsar)
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = 10.dp, vertical = 6.dp)
-    )
+    ) {
+        Text(
+            texto,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (seleccionada) MaterialTheme.colorScheme.onPrimary else color,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+fun ChipAccion(texto: String, alPulsar: () -> Unit, modifier: Modifier = Modifier, habilitado: Boolean = true, activo: Boolean = false, color: Color = LocalTokens.current.texto) {
+    val t = LocalTokens.current
+    val forma = RoundedCornerShape(8.dp)
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .heightIn(min = 40.dp)
+            .widthIn(min = 40.dp)
+            .clip(forma)
+            .background(if (activo) t.acento else t.superficieAlta)
+            .clickable(enabled = habilitado, role = androidx.compose.ui.semantics.Role.Button, onClick = alPulsar)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(texto, style = MaterialTheme.typography.labelLarge, maxLines = 1, color = when { !habilitado -> t.textoDeshabilitado; activo -> t.textoSobreAcento; else -> color })
+    }
 }
 
 @Composable

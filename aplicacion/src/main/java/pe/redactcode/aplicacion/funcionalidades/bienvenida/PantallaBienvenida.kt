@@ -62,6 +62,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import pe.redactcode.aplicacion.R
+import pe.redactcode.aplicacion.nucleo.diseno.EntradaMarca
+import pe.redactcode.aplicacion.nucleo.diseno.LocalAnimacionesActivas
+import pe.redactcode.aplicacion.nucleo.diseno.entradaSuave
 import pe.redactcode.aplicacion.datos.RepositorioPerfil
 import pe.redactcode.aplicacion.nucleo.diseno.BotonPrincipal
 import pe.redactcode.aplicacion.nucleo.diseno.BotonSecundario
@@ -136,16 +139,17 @@ fun PantallaBienvenida(alTerminar: () -> Unit, vm: BienvenidaViewModel = hiltVie
 
 @Composable
 private fun Presentacion(d: Diapositiva, indice: Int, total: Int, alSiguiente: () -> Unit, alOmitir: () -> Unit) {
+    val animarMarca = EntradaMarca.debeAnimarEntrada(true, LocalAnimacionesActivas.current, android.animation.ValueAnimator.areAnimatorsEnabled())
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = alOmitir) { Text("Omitir", color = LocalColoresExtendidos.current.textoTenue) }
         }
         Spacer(Modifier.weight(1f))
         if (indice == 0) {
-            Image(painterResource(R.drawable.logo_redact), contentDescription = "Logo de Redact Code", modifier = Modifier.size(132.dp))
+            Image(painterResource(R.drawable.logo_redact_baldosa), contentDescription = "Logo de Redact Code", modifier = Modifier.size(132.dp).entradaSuave(animarMarca, duracionMs = 320, desplazamiento = 0.dp, escalaInicial = 0.94f, clave = "bienvenida_logo"))
             Spacer(Modifier.height(20.dp))
-            Text("Redact Code", style = MaterialTheme.typography.headlineLarge)
-            Text("Programa, aprende y crea desde cualquier lugar.", style = MaterialTheme.typography.bodyMedium, color = LocalColoresExtendidos.current.textoTenue)
+            Text("Redact Code", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.entradaSuave(animarMarca, retardoMs = 80, duracionMs = 240, desplazamiento = 6.dp, clave = "bienvenida_titulo"))
+            Text("Programa, aprende y crea desde cualquier lugar.", style = MaterialTheme.typography.bodyMedium, color = LocalColoresExtendidos.current.textoTenue, modifier = Modifier.entradaSuave(animarMarca, retardoMs = 160, duracionMs = 240, desplazamiento = 6.dp, clave = "bienvenida_lema"))
             Spacer(Modifier.height(40.dp))
         }
         Box(Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
@@ -244,13 +248,14 @@ class BloqueoViewModel @Inject constructor(
     val preferencias: RepositorioPreferencias
 ) : ViewModel() {
     suspend fun verificar(valor: String): Boolean = pin.verificar(valor)
-    fun segundosBloqueo() = pin.segundosBloqueo()
+    suspend fun segundosBloqueo(): Long = pin.consultarSegundosBloqueo()
 }
 
 @Composable
 fun PantallaBloqueo(usarBiometria: Boolean, alDesbloquear: () -> Unit, vm: BloqueoViewModel = hiltViewModel()) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var espera by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     val alcance = rememberCoroutineScope()
     val actividad = androidx.activity.compose.LocalActivity.current as? androidx.fragment.app.FragmentActivity
     val intentarBiometria = {
@@ -258,28 +263,38 @@ fun PantallaBloqueo(usarBiometria: Boolean, alDesbloquear: () -> Unit, vm: Bloqu
             vm.biometria.autenticar(actividad, alDesbloquear) { }
         }
     }
-    androidx.compose.runtime.LaunchedEffect(Unit) { intentarBiometria() }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        espera = vm.segundosBloqueo()
+        if (espera == 0L) intentarBiometria()
+    }
+    androidx.compose.runtime.LaunchedEffect(espera > 0L) {
+        while (espera > 0L) {
+            kotlinx.coroutines.delay(1_000)
+            espera = vm.segundosBloqueo()
+        }
+    }
+    val mensajeError = if (espera > 0L) "Demasiados intentos. Espera $espera s." else error
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding().imePadding().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Image(painterResource(R.drawable.logo_redact), contentDescription = "Logo de Redact Code", modifier = Modifier.size(88.dp))
+        Image(painterResource(R.drawable.logo_redact_baldosa), contentDescription = "Logo de Redact Code", modifier = Modifier.size(88.dp))
         Spacer(Modifier.height(24.dp))
         Text("Ingresa tu PIN", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(16.dp))
-        CampoTexto(pin, { pin = it.filter(Char::isDigit).take(8); error = null }, "PIN", error = error, opcionesTeclado = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), transformacion = PasswordVisualTransformation(), modifier = Modifier.widthIn(max = 320.dp))
+        CampoTexto(pin, { pin = it.filter(Char::isDigit).take(8); error = null }, "PIN", error = mensajeError, opcionesTeclado = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), transformacion = PasswordVisualTransformation(), modifier = Modifier.widthIn(max = 320.dp))
         Spacer(Modifier.height(16.dp))
         BotonPrincipal("Desbloquear", {
             alcance.launch {
                 if (vm.verificar(pin)) alDesbloquear()
                 else {
-                    val espera = vm.segundosBloqueo()
-                    error = if (espera > 0) "Demasiados intentos. Espera $espera s." else "PIN incorrecto"
+                    espera = vm.segundosBloqueo()
+                    error = if (espera > 0L) null else "PIN incorrecto"
                     pin = ""
                 }
             }
-        }, Modifier.widthIn(min = 200.dp), habilitado = pin.length >= 4)
+        }, Modifier.widthIn(min = 200.dp), habilitado = pin.length >= 4 && espera == 0L)
         if (usarBiometria && vm.biometria.disponible()) {
             Spacer(Modifier.height(8.dp))
             BotonSecundario("Usar biometría", { intentarBiometria() })

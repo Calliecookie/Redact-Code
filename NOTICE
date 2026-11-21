@@ -16,6 +16,7 @@ Bibliotecas que se descargan al compilar
 - Rhino (org.mozilla) · MPL-2.0
 - jsoup · MIT
 - Chaquopy · MIT; intérprete de Python · PSF License
+- Termux terminal-emulator y terminal-view · Apache-2.0
 - SDK de Anthropic para Java · MIT
 - AndroidX, Jetpack Compose, íconos Material, Kotlin, kotlinx, Dagger/Hilt,
   OkHttp y Retrofit · Apache-2.0

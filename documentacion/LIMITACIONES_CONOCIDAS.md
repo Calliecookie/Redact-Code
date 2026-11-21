@@ -138,3 +138,56 @@ V2.0 **no añade dependencias nuevas**; se mantienen las de la sección 10 (Sora
 ## 13. Estado real de V2.0
 
 La versión se publica como **v2.0** en la rama `v2`, pendiente de tus pruebas en dispositivo antes de integrarse en `main`. Siguen pendientes: pruebas en dispositivo, multicursor, pliegues de código, formateadores reales para Python y JavaScript, resolución asistida de conflictos, fusión de ramas, prueba real del panel de Antigravity con tu PC, y verificación de GitHub, Open VSX y los proveedores de IA contra servicios reales.
+
+
+## 14. Limitaciones de V2.5 - Terminal profesional, entornos de ejecucion e identidad visual
+
+Nada de esta sección se probó en un teléfono físico; la verificación fue en JVM, Robolectric y CPython de escritorio. Los componentes que dependen de Android (`TerminalView`, `libtermux.so`, Chaquopy real, `FileObserver`, animaciones) solo se comprobaron compilando.
+
+**Terminal con PTY**
+- Se usa `libtermux.so` de las bibliotecas de Termux (0.118.1). Sus bibliotecas nativas **no están alineadas a 16 KB**; en dispositivos con páginas de 16 KB podrían no cargar. Si la carga falla, la pestaña Terminal muestra el aviso y usa la terminal no interactiva de V2.0 (no verificado en dispositivo).
+- El shell es `/system/bin/sh` de Android, no `bash`. No hay confinamiento real en la carpeta del proyecto.
+- Android 10+ no permite ejecutar binarios descargados: no existen `gcc` ni Node.js reales.
+- Las sesiones viven mientras viva el proceso; HyperOS/MIUI puede cerrarlo en segundo plano. No hay servicio en primer plano.
+- No se probaron teclados virtuales de Xiaomi con `shouldEnforceCharBasedInput`; TalkBack tiene soporte limitado en la vista de terminal (se ofrece «Ver como texto»).
+- **División**: hasta 2 paneles de shell (lado a lado desde 600 dp, apilados en pantallas estrechas); el panel con foco se marca con borde y recibe las teclas extra. El foco por toque se detecta con un observador de punteros que no se verificó en dispositivo. No hay menú `+` por tipo de sesión: Python y JavaScript siguen en sus pestañas.
+
+**Puente de comandos**
+- `python`, `node`, `git`, `pip`, `npm` y `redact` son funciones de shell que piden a la app ejecutar la operación mediante archivos en `filesDir/terminal/puente/<proyecto>`. El comportamiento de SELinux sobre ese directorio **no está verificado**. La app consulta la carpeta cada 100 ms (no usa `FileObserver`).
+- **El puente no es interactivo**: dentro de la terminal, `python archivo.py` no recibe lo que se escribe (`input()` falla con fin de archivo). La entrada interactiva está en la pestaña **Depuración** (ver abajo), que no usa el PTY: lee de una cola. No se implementó `input()` a través del PTY porque el intérprete corre dentro del proceso de la app (Chaquopy), no como proceso hijo del PTY.
+- `git` admite `init`, `status`, `add`, `commit`, `log`, `diff`, `branch`, `checkout`/`switch`, `clone`, `pull` y `push`. `clone` crea un **proyecto nuevo** (no clona en la carpeta actual) y solo acepta `https://github.com/usuario/repo`; `pull`/`push` usan el vínculo y el token de GitHub ya configurados en la app y el mismo sincronizador del panel de Control de código (fusión por archivo; `push` exige commits locales y que el remoto no haya avanzado). Sin token, fallan con el error de GitHub. No hay `merge`, `rebase`, `stash`, `tag`, SSH ni submódulos. Estas operaciones de red se probaron con acciones simuladas, no contra GitHub real.
+
+**pip y npm**
+- pip: solo ruedas `py3-none-any` de PyPI, con SHA-256, límite de 50 MB, 15 niveles y 60 paquetes, sin retroceso. Los paquetes con código nativo se rechazan con un mensaje explícito. El entorno es por proyecto (`filesDir/entornos/<id>/python/site-packages`).
+- npm: `install`, `list` y `uninstall` descargan del registro público (`registry.npmjs.org`) a `node_modules` del proyecto, con verificación de integridad (sha512 o sha1), límites de tamaño (30 MB por paquete, 100 paquetes, 12 niveles), sin scripts de instalación y sin copias anidadas (un conflicto de versiones se informa y se detiene). No se admiten dependencias git, URL ni archivos locales. **No hay Node.js**: los paquetes sirven para la vista previa web (`<script src="node_modules/...">`); `node archivo.js` no resuelve `require`. `node_modules` se excluye de la búsqueda, del contexto del agente y del control de versiones.
+- La resolución de rangos semver es propia (soporta `^`, `~`, comparadores, `x`, `||` y guiones) y puede diferir de npm en casos raros (etiquetas de prelanzamiento).
+
+**Agente y comandos**
+- Los comandos propuestos requieren el permiso «Proponer comandos de terminal» (desactivado por defecto) y la aprobación de cada uno. El clasificador es heurístico: bloquea los casos conocidos, pero no puede garantizar que ningún comando ingenioso evada las reglas; los desconocidos se marcan de riesgo alto.
+- El registro (`registro_ejecuciones.jsonl`, con secretos censurados, recortado a 512 KB) se ve y se borra en Ajustes › Agente de código. La censura de secretos es por patrones y puede dejar pasar formatos no contemplados.
+
+**Ejecución interactiva y depuración (Python)**
+- Pestaña **Depuración** del panel inferior: «Ejecutar» corre el archivo activo con `input()` interactivo (cola) y «Depurar» lo corre bajo `bdb` con puntos de interrupción, Continuar, Paso, Entrar, Salir, Detener, pila de llamadas, variables y evaluación de expresiones. Solo Python, un archivo (`<redact>`), una sesión a la vez; ejecuta el texto del editor aunque no esté guardado, sin importar otros archivos del proyecto salvo paquetes instalados con pip.
+- Los puntos de interrupción se alternan con el botón «Punto en la línea del cursor» o el comando «Alternar punto de interrupción»; **no hay icono en el margen del editor** (no se verificó la API `LineSideIcon` de Sora contra el analizador de estilos) y los puntos no se desplazan al editar el texto ni se conservan al salir del proyecto.
+- El tiempo límite no cuenta las esperas de entrada ni las pausas. El corte y la cancelación se hacen con una función de rastreo (`sys.settrace`), igual que el botón Ejecutar: enlentece el programa y no interrumpe una llamada nativa larga (por ejemplo `time.sleep(60)`). La salida estándar se redirige a nivel global mientras dura la sesión: no usar la consola Python a la vez.
+- No hay depuración de JavaScript (V8 vía `JavaScriptSandbox` no la ofrece) ni depuración remota del WebView.
+- No se probó con Chaquopy real ni en el dispositivo: el motor (`redact_sesion.py`) se probó con CPython 3.13 de escritorio y el panel solo se compiló.
+
+**Identidad visual**
+- Los derivados del logotipo salen de `recursos_graficos/derivar_logo.py` a partir del original, que no se modifica: baldosa, pantalla de inicio, ícono adaptativo y capa monocromática (silueta de la «R» por umbral de color; vista previa en `build/derivados_logo/`, no versionada). Falta que la usuaria apruebe visualmente el ícono. `logo_redact.png` queda sin uso y no se eliminó (1 aviso `UnusedResources`).
+- La pantalla de inicio sigue el tema elegido mediante `UiModeManager` en Android 12+; en versiones anteriores depende del tema del sistema. La animación de salida no se verificó en dispositivo ni con otras capas de fabricante.
+
+**Licencias**
+- Se añadieron `terminal-emulator` y `terminal-view` de Termux 0.118.1 (Apache-2.0). No se usa `termux-shared` (GPLv3). Obtenidas desde JitPack: el host `jitpack.io` debe estar permitido al compilar.
+
+**Auditoría de V2.5**
+- Corregido y con prueba: ver `RESULTADOS_DE_PRUEBAS.md`, «Auditoría de V2.5».
+- Pendiente, sin solución segura sin dispositivo:
+  - `UiModeManager.setApplicationNightMode(MODE_NIGHT_AUTO)` se usa para «seguir al sistema»; el comportamiento exacto en HyperOS no está verificado. Si la pantalla de inicio no coincide con el tema, la solución recomendada es fijar siempre el modo explícito (claro u oscuro) calculado al cambiar la preferencia.
+  - El indicador del shell se define con `PS1='${PWD##*/} $ '` (sintaxis de mksh). Si el `sh` del dispositivo no fuera mksh, se vería el texto literal; la solución sería un indicador fijo.
+  - `Ctrl+C` durante un comando del puente depende de que mksh ejecute la trampa `INT` de la función; solo se probó la cancelación creando el archivo de cancelación con `/bin/sh` de escritorio.
+  - Las sesiones de terminal de un proyecto no se cierran al borrar el proyecto ni al salir del editor; se cierran con la X o al terminar el proceso. Límite: 8 por proyecto.
+  - Los módulos de Python ya importados de un entorno siguen en memoria al cambiar de proyecto (se quita la ruta, no los módulos cargados).
+  - El contador de intentos del PIN ahora se guarda cifrado; no tiene prueba automática porque Android Keystore no existe en Robolectric.
+  - El clasificador de riesgo sigue siendo heurístico; leer fuera del proyecto se marca como riesgo alto, no se bloquea.
+  - No se midió rendimiento en el teléfono (arranque, memoria, fluidez de la terminal). No hay mediciones nuevas en esta auditoría.

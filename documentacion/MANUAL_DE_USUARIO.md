@@ -145,3 +145,12 @@ Si usas Google Antigravity en tu PC, activa allí el control remoto (en la app: 
 ## 23. Qué no hace V2.0
 
 No tiene multicursor ni pliegues de código, no intercambia datos con Google Antigravity (solo abre su panel web), no resuelve conflictos de GitHub dentro de los archivos ni fusiona ramas. Ver `LIMITACIONES_CONOCIDAS.md`.
+
+
+## V2.5: terminal y comandos
+
+- **Terminal**: en el panel inferior, pestaña Terminal. Pulsa `+` para otra sesión, la «T» para ver el contenido como texto, el cuadrado para interrumpir (Ctrl+C) y la X para cerrar. La fila de teclas permite Esc, Tab, Ctrl, Alt, flechas y símbolos. Pellizca para cambiar el tamaño de letra.
+- **Dividir**: el botón de columnas muestra dos sesiones a la vez; el panel con borde recibe las teclas extra.
+- **Comandos disponibles dentro de la terminal**: `python archivo.py`, `node archivo.js`, `git` (init, status, add, commit, log, diff, branch, checkout, clone, pull, push), `pip install paquete` (solo paquetes Python puros), `npm install paquete` (descarga a `node_modules`, sin ejecutar scripts) y `redact` para ver la ayuda. Dentro de la terminal, `input()` no recibe lo que escribes: usa la pestaña Depuración.
+- **Depuración (Python)**: pestaña Depuración. «Ejecutar» corre el archivo activo con entrada interactiva; «Depurar» se detiene en los puntos de interrupción (alterna uno con «Punto en la línea del cursor») y permite Continuar, Paso, Entrar, Salir, ver variables y pila, y evaluar expresiones.
+- **Agente**: en Ajustes › Agente de código activa «Proponer comandos de terminal». Cada comando propuesto muestra su nivel de riesgo y solo se ejecuta si pulsas Ejecutar; los destructivos se bloquean. Ahí mismo ves y borras el registro de comandos.

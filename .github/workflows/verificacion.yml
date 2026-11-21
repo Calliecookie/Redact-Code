@@ -3,7 +3,9 @@ name: Verificación
 on:
   push:
     branches: [main, "v*"]
+    paths: ["aplicacion/**", "nucleo/**", "gradle/**", "*.gradle.kts", "gradle.properties", "gradlew", "gradlew.bat", ".github/workflows/**"]
   pull_request:
+    paths: ["aplicacion/**", "nucleo/**", "gradle/**", "*.gradle.kts", "gradle.properties", "gradlew", "gradlew.bat", ".github/workflows/**"]
   workflow_dispatch:
 
 concurrency:

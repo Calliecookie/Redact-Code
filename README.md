@@ -1,8 +1,8 @@
-# Redact Code v2.0 - Renovacion integral del IDE
+# Redact Code
 
 Programa, aprende y crea desde cualquier lugar.
 
-Proyecto Android Studio (Kotlin + Jetpack Compose). La interfaz de V2.0 está compilada y probada en la JVM; las pruebas en dispositivo están pendientes (ver `documentacion/RESULTADOS_DE_PRUEBAS.md`). Ábrelo con **File › Open** seleccionando esta carpeta, conecta tu celular por USB y pulsa **Run**.
+Proyecto Android Studio (Kotlin + Jetpack Compose). Versión 2.5.1, probada en el emulador y en un teléfono real; detalle en `documentacion/HISTORIAL_DE_VERSIONES.md`. Ábrelo con **File › Open** seleccionando esta carpeta, conecta tu celular por USB y pulsa **Run**.
 
 ## Documentación
 

@@ -564,5 +564,20 @@ def estructura(codigo):
     return json.dumps({"error": None, "lineas": lineas}, ensure_ascii=False)
 
 
+_ruta_paquetes = None
+
+
+def agregar_ruta_paquetes(ruta):
+    import importlib
+    global _ruta_paquetes
+    if _ruta_paquetes and _ruta_paquetes != ruta and _ruta_paquetes in sys.path:
+        sys.path.remove(_ruta_paquetes)
+    _ruta_paquetes = ruta or None
+    if ruta and ruta not in sys.path:
+        sys.path.insert(0, ruta)
+        importlib.invalidate_caches()
+    return bool(ruta) and ruta in sys.path
+
+
 def version():
     return sys.version.split()[0]

@@ -54,7 +54,7 @@ data class Pestana(
 }
 
 enum class PanelEditor(val titulo: String) {
-    NINGUNO(""), PROBLEMAS("Problemas"), EJECUCION("Salida"), TERMINAL("Terminal"), CONSOLA("Consola"), REVISION("Revisión"), VISTA_PREVIA("Vista previa")
+    NINGUNO(""), PROBLEMAS("Problemas"), EJECUCION("Salida"), TERMINAL("Terminal"), DEPURACION("Depuración"), CONSOLA("Consola"), REVISION("Revisión"), VISTA_PREVIA("Vista previa")
 }
 
 data class CambioExterno(val ruta: String, val texto: String, val deshacible: Boolean)
@@ -386,7 +386,7 @@ class EditorViewModel @Inject constructor(
             if (pestana.modificada) guardarInterno(proyecto, pestana)
             val limite = preferencias.value.limiteEjecucionSegundos
             val resultado = when (pestana.lenguaje) {
-                Lenguaje.PYTHON -> servicio.ejecutarPython(pestana.textoActual, _estado.value.entradaPrograma, limite)
+                Lenguaje.PYTHON -> { servicio.python.usarEntorno(proyectoId); servicio.ejecutarPython(pestana.textoActual, _estado.value.entradaPrograma, limite) }
                 else -> servicio.ejecutarJavaScript(pestana.textoActual, limite)
             }
             actividad.registrarEjecucion()

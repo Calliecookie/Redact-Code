@@ -115,7 +115,7 @@ class GestorArchivos @Inject constructor(@ApplicationContext private val context
 
     suspend fun listarArchivos(carpeta: String): List<String> = withContext(Dispatchers.IO) {
         val base = carpetaProyecto(carpeta)
-        base.walkTopDown().onEnter { it == base || !it.name.startsWith(".") }.filter { it.isFile && !it.name.startsWith(".") }.map { relativa(carpeta, it) }.sorted().toList()
+        base.walkTopDown().onEnter { it == base || (!it.name.startsWith(".") && it.name != "node_modules") }.filter { it.isFile && !it.name.startsWith(".") }.map { relativa(carpeta, it) }.sorted().toList()
     }
 
     suspend fun crearArchivo(carpeta: String, carpetaPadre: String, nombre: String, contenido: String = ""): String = withContext(Dispatchers.IO) {
@@ -194,7 +194,7 @@ class GestorArchivos @Inject constructor(@ApplicationContext private val context
         if (consulta.isBlank()) return@withContext emptyList()
         val resultado = mutableListOf<CoincidenciaBusqueda>()
         val base = carpetaProyecto(carpeta)
-        for (archivo in base.walkTopDown().onEnter { it == base || !it.name.startsWith(".") }.filter { it.isFile && !it.name.startsWith(".") }) {
+        for (archivo in base.walkTopDown().onEnter { it == base || (!it.name.startsWith(".") && it.name != "node_modules") }.filter { it.isFile && !it.name.startsWith(".") }) {
             val ruta = relativa(carpeta, archivo)
             if (archivo.name.contains(consulta, ignoreCase = true)) resultado += CoincidenciaBusqueda(ruta, 0, archivo.name, true)
             if (archivo.length() <= TAMANO_MAXIMO_BYTES) {

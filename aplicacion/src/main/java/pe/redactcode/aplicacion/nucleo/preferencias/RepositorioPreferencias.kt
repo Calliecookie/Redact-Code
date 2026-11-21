@@ -77,6 +77,7 @@ data class PreferenciasUsuario(
     val agenteCrear: Boolean = true,
     val agenteModificar: Boolean = true,
     val agenteEliminar: Boolean = false,
+    val agenteEjecutarComandos: Boolean = false,
     val agenteMaxArchivos: Int = 30,
     val urlAntigravity: String = PanelAntigravity.URL_PREDETERMINADA,
     val mostrarExtensiones: Boolean = true,
@@ -147,6 +148,7 @@ class RepositorioPreferencias @Inject constructor(@ApplicationContext private va
         val agenteCrear = booleanPreferencesKey("agente_crear")
         val agenteModificar = booleanPreferencesKey("agente_modificar")
         val agenteEliminar = booleanPreferencesKey("agente_eliminar")
+        val agenteEjecutarComandos = booleanPreferencesKey("agente_ejecutar_comandos")
         val agenteMaxArchivos = intPreferencesKey("agente_max_archivos")
         val urlAntigravity = stringPreferencesKey("url_antigravity")
         val mostrarExtensiones = booleanPreferencesKey("mostrar_extensiones")
@@ -215,6 +217,7 @@ class RepositorioPreferencias @Inject constructor(@ApplicationContext private va
                 agenteCrear = p[Claves.agenteCrear] ?: b.agenteCrear,
                 agenteModificar = p[Claves.agenteModificar] ?: b.agenteModificar,
                 agenteEliminar = p[Claves.agenteEliminar] ?: b.agenteEliminar,
+                agenteEjecutarComandos = p[Claves.agenteEjecutarComandos] ?: b.agenteEjecutarComandos,
                 agenteMaxArchivos = p[Claves.agenteMaxArchivos] ?: b.agenteMaxArchivos,
                 urlAntigravity = p[Claves.urlAntigravity] ?: b.urlAntigravity,
                 mostrarExtensiones = p[Claves.mostrarExtensiones] ?: b.mostrarExtensiones,
@@ -280,6 +283,7 @@ class RepositorioPreferencias @Inject constructor(@ApplicationContext private va
     suspend fun agenteCrear(valor: Boolean) = editar { it[Claves.agenteCrear] = valor }
     suspend fun agenteModificar(valor: Boolean) = editar { it[Claves.agenteModificar] = valor }
     suspend fun agenteEliminar(valor: Boolean) = editar { it[Claves.agenteEliminar] = valor }
+    suspend fun agenteEjecutarComandos(valor: Boolean) = editar { it[Claves.agenteEjecutarComandos] = valor }
     suspend fun agenteMaxArchivos(valor: Int) = editar { it[Claves.agenteMaxArchivos] = valor.coerceIn(1, 100) }
     suspend fun urlAntigravity(valor: String) = editar { if (PanelAntigravity.validar(valor) == null) it[Claves.urlAntigravity] = valor.trim() }
     suspend fun mostrarExtensiones(valor: Boolean) = editar { it[Claves.mostrarExtensiones] = valor }

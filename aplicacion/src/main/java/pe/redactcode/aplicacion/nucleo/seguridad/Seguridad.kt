@@ -25,7 +25,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class CifradorKeystore @Inject constructor() {
+open class CifradorKeystore @Inject constructor() {
     private val alias = "redact_code_credenciales_v1"
     private val proveedor = "AndroidKeyStore"
     private val transformacion = "AES/GCM/NoPadding"
@@ -44,14 +44,14 @@ class CifradorKeystore @Inject constructor() {
         return generador.generateKey()
     }
 
-    fun cifrar(texto: String): String {
+    open fun cifrar(texto: String): String {
         val cifrador = Cipher.getInstance(transformacion)
         cifrador.init(Cipher.ENCRYPT_MODE, clave())
         val datos = cifrador.doFinal(texto.toByteArray(Charsets.UTF_8))
         return Base64.encodeToString(cifrador.iv + datos, Base64.NO_WRAP)
     }
 
-    fun descifrar(cifrado: String): String {
+    open fun descifrar(cifrado: String): String {
         val bytes = Base64.decode(cifrado, Base64.NO_WRAP)
         val vector = bytes.copyOfRange(0, 12)
         val datos = bytes.copyOfRange(12, bytes.size)
@@ -100,6 +100,8 @@ class AlmacenCredenciales @Inject constructor(
         const val CLAVE_COMPATIBLE = "clave_proveedor_compatible"
         const val HASH_PIN = "hash_pin"
         const val SAL_PIN = "sal_pin"
+        const val INTENTOS_PIN = "intentos_pin"
+        const val BLOQUEO_PIN = "bloqueo_pin"
     }
 }
 
@@ -107,6 +109,7 @@ class AlmacenCredenciales @Inject constructor(
 class GestorPin @Inject constructor(private val almacen: AlmacenCredenciales) {
     private var intentosFallidos = 0
     private var bloqueadoHasta = 0L
+    internal var reloj: () -> Long = { System.currentTimeMillis() }
 
     val tienePin: Boolean get() = almacen.existe(AlmacenCredenciales.HASH_PIN)
 
@@ -123,23 +126,51 @@ class GestorPin @Inject constructor(private val almacen: AlmacenCredenciales) {
     suspend fun eliminar() {
         almacen.eliminar(AlmacenCredenciales.HASH_PIN)
         almacen.eliminar(AlmacenCredenciales.SAL_PIN)
+        almacen.eliminar(AlmacenCredenciales.INTENTOS_PIN)
+        almacen.eliminar(AlmacenCredenciales.BLOQUEO_PIN)
+        intentosFallidos = 0
+        bloqueadoHasta = 0L
     }
 
-    fun segundosBloqueo(): Long = ((bloqueadoHasta - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
+    fun segundosBloqueo(): Long = ((bloqueadoHasta - reloj()) / 1000).coerceAtLeast(0)
+
+    suspend fun consultarSegundosBloqueo(): Long {
+        cargarEstado()
+        return segundosBloqueo()
+    }
+
+    private var estadoCargado = false
+
+    private suspend fun cargarEstado() {
+        if (estadoCargado) return
+        intentosFallidos = almacen.leer(AlmacenCredenciales.INTENTOS_PIN)?.toIntOrNull() ?: 0
+        bloqueadoHasta = almacen.leer(AlmacenCredenciales.BLOQUEO_PIN)?.toLongOrNull() ?: 0L
+        val maximo = reloj() + 30_000L * (intentosFallidos - 4).coerceAtLeast(0)
+        if (bloqueadoHasta > maximo) bloqueadoHasta = maximo
+        estadoCargado = true
+    }
+
+    private suspend fun guardarEstado() {
+        almacen.guardar(AlmacenCredenciales.INTENTOS_PIN, intentosFallidos.toString())
+        almacen.guardar(AlmacenCredenciales.BLOQUEO_PIN, bloqueadoHasta.toString())
+    }
 
     suspend fun verificar(pin: String): Boolean {
+        cargarEstado()
         if (segundosBloqueo() > 0) return false
         val sal = almacen.leer(AlmacenCredenciales.SAL_PIN)?.let { Base64.decode(it, Base64.NO_WRAP) } ?: return false
         val esperado = almacen.leer(AlmacenCredenciales.HASH_PIN)?.let { Base64.decode(it, Base64.NO_WRAP) } ?: return false
         val correcto = MessageDigest.isEqual(esperado, derivar(pin, sal))
         if (correcto) {
             intentosFallidos = 0
+            bloqueadoHasta = 0L
         } else {
             intentosFallidos++
             if (intentosFallidos >= 5) {
-                bloqueadoHasta = System.currentTimeMillis() + 30_000L * (intentosFallidos - 4)
+                bloqueadoHasta = reloj() + 30_000L * (intentosFallidos - 4)
             }
         }
+        guardarEstado()
         return correcto
     }
 

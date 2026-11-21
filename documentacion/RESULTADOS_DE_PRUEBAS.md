@@ -158,3 +158,52 @@ Avisos que permanecen, con su justificación:
 | **Acceso fuera de rango** en el resaltado con código incompleto (por ejemplo, un atributo HTML sin cerrar al final) | Avance sin comprobar el fin del texto | Avance seguro al final del texto |
 | Caracteres con tilde dañados en 6 archivos tras una edición automatizada | Lectura de UTF-8 como Windows-1252 | Se revirtió la doble codificación y se verificó que no queden secuencias dañadas |
 | Expectativas incorrectas en 3 pruebas iniciales (un CSS con dos errores, un caso de aprobación parcial y un botón fuera del área visible) | Error en la prueba, no en la aplicación | Pruebas corregidas |
+
+
+## V2.5 - Terminal profesional, entornos de ejecucion e identidad visual
+
+Ejecución completa con `--rerun-tasks` de `:nucleo:compileKotlin`, `:nucleo:compileTestKotlin`, `:aplicacion:compileDebugKotlin`, `:nucleo:test`, `:aplicacion:testDebugUnitTest` y `:aplicacion:lintDebug`. No se ejecutó ninguna tarea que genere APK o AAB. Después de esa ejecución solo se corrigieron dos avisos de lint (`super.onCleared()` y el ancho de ventana del panel dividido) y se volvieron a ejecutar `:aplicacion:compileDebugKotlin` y `:aplicacion:lintDebug`; las pruebas no se repitieron tras esa última edición.
+
+| Categoría | Resultado real |
+|---|---|
+| JVM (`:nucleo`) | 82 pruebas, 0 fallos (V2.0: 53). Cubren: clasificador de riesgo (más de 60 casos con evasiones) y censura de secretos; PEP 440; pip con servidor simulado (dependencias, inexistente, rueda nativa, suma incorrecta, zip-slip); npm con registro simulado (semver, dependencias, `package.json`, integridad, rutas peligrosas, enlaces, nombres inválidos); `git` local y remoto con acciones simuladas; puente con `/bin/sh` real (salida, código, directorio fuera del proyecto, cancelación); comandos del agente y registro; reductor de la sesión de depuración y puntos de interrupción |
+| Robolectric y unitarias (`:aplicacion`) | 38 pruebas, 0 fallos (V2.0: 29): contraste de la paleta ANSI, límites de fuente, script y entorno de terminal, animación de entrada, `fondo_ventana` claro y nocturno, recursos del logotipo |
+| Python de escritorio (CPython 3.13) | 15 pruebas, 0 fallos: 4 en `test_redact_python.py` (ruta de paquetes, importación, entrada, tiempo límite) y 11 en `test_redact_sesion.py` (`input()` interactivo, la espera no cuenta para el límite, bucle infinito, detener en entrada y en pausa, error con línea, error de sintaxis, punto de interrupción con variables, pila y evaluación, paso/entrar/salir, sesión ocupada) |
+| Lint | 0 errores, 3 avisos: `ObsoleteSdkInt`, `OldTargetApi`, `UnusedResources` (`logo_redact.png`). Desaparecieron los 2 `MonochromeLauncherIcon` |
+| Dispositivo (Xiaomi Redmi Note 14) | **No probado** |
+
+**No cubierto por pruebas automáticas** (solo compila): `TerminalView`/`libtermux.so` y las sesiones PTY, la división del panel, `PanelDepuracion` y `DepuradorViewModel` con Chaquopy real, el icono y la animación de arranque, las acciones remotas de `git` contra GitHub real, `npm`/`pip` contra los registros reales. Se comprobó que `libtermux.so` entra en arm64-v8a, armeabi-v7a, x86 y x86_64.
+
+Hallazgos corregidos: negro ANSI oscuro con contraste 1,79 (subido a ≥ 3); `find` y las tuberías a `sh` mal clasificadas; el puente no creaba el archivo de salida al empezar (impedía cancelar); el depurador paraba en la primera línea (`bdb.Bdb.reset` deja todo en modo paso), no registraba puntos (faltaba la fuente en `linecache`), reutilizaba puntos entre sesiones (`Breakpoint` es estado de clase) y contaba la espera de entrada contra el límite de tiempo; la silueta monocromática mostraba el borde de la baldosa (se pasó a umbral por canal máximo y radio útil).
+
+### Auditoría de V2.5
+
+Verificación completa con `--rerun-tasks` después de todas las correcciones, sin generar APK ni AAB:
+
+| Categoría | Resultado real |
+|---|---|
+| JVM (`:nucleo`) | 83 pruebas, 0 fallos |
+| Robolectric y unitarias (`:aplicacion`) | 38 pruebas, 0 fallos |
+| Pruebas de interfaz automatizadas | Ninguna nueva; no hay pruebas instrumentadas |
+| Python de escritorio (CPython 3.13) | 19 pruebas, 0 fallos (5 + 14) |
+| Lint | 0 errores, 3 avisos (`ObsoleteSdkInt`, `OldTargetApi`, `UnusedResources`) |
+| Dispositivo | **No probado** |
+
+Errores encontrados por revisión de código y corregidos:
+
+| Error | Corrección | Prueba de regresión |
+|---|---|---|
+| Al cambiar de pestaña de sesión, la vista seguía mostrando la sesión anterior (el `TerminalView` solo se enlazaba al crearse) | Se enlaza la sesión en cada actualización si cambió | No automatizable sin dispositivo |
+| El indicador del shell usaba `\w`, que mksh no interpreta | `PS1='${PWD##*/} $ '` | No (requiere mksh) |
+| El bucle de eventos del depurador capturaba la cancelación y giraba sin fin al cerrar el proyecto o si Python fallaba | Respeta la cancelación y termina tras 5 fallos seguidos | No (requiere Chaquopy) |
+| Las órdenes al depurador se enviaban desde el hilo principal | Se envían en segundo plano | No |
+| El tiempo límite del depurador dependía de `ctypes` y se perdía al continuar sin puntos de interrupción | Rastreo con `sys.settrace` en todos los modos | 3 pruebas nuevas de Python |
+| Solicitudes antiguas del puente se ejecutaban al abrir una terminal tras un cierre inesperado | La carpeta se limpia al iniciar y al detener; el servidor se detiene cuando no quedan sesiones | `PuenteTest` |
+| `pip install -r` resolvía el archivo fuera del directorio actual y sin comprobar el proyecto | Ruta relativa al directorio y dentro del proyecto | No |
+| «Detener» un comando del agente no mataba el proceso | Se destruye el proceso en curso | No |
+| Clasificador: redirecciones con `..`, lectura fuera del proyecto marcada como riesgo bajo, `find -exec rm -rf` no bloqueado | Bloqueo o riesgo alto según el caso | 14 casos nuevos |
+| La ruta de paquetes de un proyecto quedaba activa en otro | Una sola ruta activa | 1 prueba de Python |
+| El bloqueo por intentos fallidos del PIN se reiniciaba al cerrar la app | Contador y bloqueo guardados cifrados | No (sin Keystore en Robolectric) |
+| La animación de salida podía fallar si el sistema no entrega el ícono del splash | Se protege la lectura del ícono | No |
+| El modo nocturno de la app se comparaba con el del sistema y podía no actualizarse | Se guarda el último modo aplicado | No |
+| Botones del depurador y teclas extra sin estado deshabilitado visible ni tamaño táctil mínimo | Componente `ChipAccion` (40 dp, rol de botón, color deshabilitado) | No |

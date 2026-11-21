@@ -392,8 +392,33 @@ class TerminalViewModel @Inject constructor(
     estadoGuardado: SavedStateHandle,
     proyectos: RepositorioProyectos,
     private val servicio: ServicioCodigo,
-    private val repositorioPreferencias: RepositorioPreferencias
+    private val repositorioPreferencias: RepositorioPreferencias,
+    private val gestorSesiones: pe.redactcode.aplicacion.funcionalidades.terminal.GestorSesionesTerminal
 ) : ViewModelProyecto(estadoGuardado, proyectos) {
+    val sesionesPty = gestorSesiones.sesiones(proyectoId)
+
+    private var creandoSesion = false
+
+    fun asegurarSesion() {
+        if (!creandoSesion && gestorSesiones.sesiones(proyectoId).value.isEmpty()) nuevaSesion()
+    }
+
+    fun nuevaSesion() {
+        creandoSesion = true
+        viewModelScope.launch {
+            try {
+                val raiz = carpeta() ?: return@launch
+                if (gestorSesiones.crear(proyectoId, raiz) == null) avisar("Se alcanzó el límite de sesiones de terminal")
+            } finally {
+                creandoSesion = false
+            }
+        }
+    }
+
+    fun cerrarSesion(id: Int) {
+        gestorSesiones.cerrar(proyectoId, id)
+    }
+
     private val _estado = MutableStateFlow(EstadoTerminal())
     val estado: StateFlow<EstadoTerminal> = _estado.asStateFlow()
     val preferencias: StateFlow<PreferenciasUsuario> = repositorioPreferencias.preferencias.stateIn(viewModelScope, SharingStarted.Eagerly, PreferenciasUsuario())
@@ -423,7 +448,7 @@ class TerminalViewModel @Inject constructor(
         if (!archivo.isFile) return ResultadoComando("", "No existe el archivo $nombre\n", 1)
         val codigo = withContext(Dispatchers.IO) { archivo.readText() }
         val limite = repositorioPreferencias.actuales().limiteEjecucionSegundos
-        val r = if (lenguaje == Lenguaje.PYTHON) servicio.ejecutarPython(codigo, "", limite) else servicio.ejecutarJavaScript(codigo, limite)
+        val r = if (lenguaje == Lenguaje.PYTHON) { servicio.python.usarEntorno(proyectoId); servicio.ejecutarPython(codigo, "", limite) } else servicio.ejecutarJavaScript(codigo, limite)
         val salida = r.salida.let { if (it.isEmpty() || it.endsWith("\n")) it else "$it\n" }
         val errores = r.errores.let { if (it.isEmpty() || it.endsWith("\n")) it else "$it\n" }
         return ResultadoComando(salida, errores, if (r.estado == EstadoEjecucion.EXITO) 0 else 1)
@@ -481,7 +506,7 @@ class TerminalViewModel @Inject constructor(
         viewModelScope.launch {
             _estado.update { it.copy(evaluando = true, consola = it.consola + LineaTerminal((if (lenguaje == Lenguaje.PYTHON) ">>> " else "> ") + entrada, TipoLineaTerminal.COMANDO)) }
             val limite = repositorioPreferencias.actuales().limiteEjecucionSegundos
-            val r = if (lenguaje == Lenguaje.PYTHON) servicio.python.consola(entrada, limite) else {
+            val r = if (lenguaje == Lenguaje.PYTHON) { servicio.python.usarEntorno(proyectoId); servicio.python.consola(entrada, limite) } else {
                 val previo = entradasJs.joinToString("\n")
                 val programa = "var __l=console.log,__e=console.error,__w=console.warn,__i=console.info;" +
                     "console.log=console.error=console.warn=console.info=function(){};\n" + previo +
@@ -517,15 +542,48 @@ data class EstadoAgente(
     val proveedor: String? = null,
     val incluidos: List<String> = emptyList(),
     val omitidos: List<String> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    val resultadosComandos: Map<String, ResultadoComandoAgente> = emptyMap(),
+    val comandoEnCurso: String? = null,
+    val comandosDescartados: Set<String> = emptySet()
 )
+
+data class ResultadoComandoAgente(val salida: String, val codigo: Int)
 
 @HiltViewModel
 class AgenteViewModel @Inject constructor(
     estadoGuardado: SavedStateHandle,
     proyectos: RepositorioProyectos,
-    private val fabrica: FabricaProveedoresAgente
+    private val fabrica: FabricaProveedoresAgente,
+    private val puente: pe.redactcode.aplicacion.funcionalidades.terminal.ServicioPuenteTerminal,
+    private val repositorioPreferencias: RepositorioPreferencias
 ) : ViewModelProyecto(estadoGuardado, proyectos) {
+    private var trabajoComando: Job? = null
+
+    fun ejecutarComando(comando: String) {
+        if (_estado.value.comandoEnCurso != null) return
+        trabajoComando = viewModelScope.launch {
+            val prefs = repositorioPreferencias.actuales()
+            if (!prefs.agenteEjecutarComandos) { avisar("El permiso para ejecutar comandos del agente está desactivado"); return@launch }
+            if (_estado.value.propuesta?.comandos?.any { it.comando == comando } != true) return@launch
+            val raiz = carpeta() ?: return@launch
+            _estado.update { it.copy(comandoEnCurso = comando) }
+            val r = runCatching { puente.ejecutarLinea(proyectoId, raiz, comando, "agente", prefs.limiteTerminalSegundos) }
+            val texto = r.fold({ (it.salida + it.error).trimEnd().ifEmpty { "(sin salida)" } + if (it.tiempoAgotado) "\nTiempo agotado" else "" }, { "Error: ${it.message}" })
+            val codigo = r.getOrNull()?.codigo ?: 1
+            _estado.update { it.copy(comandoEnCurso = null, resultadosComandos = it.resultadosComandos + (comando to ResultadoComandoAgente(texto, codigo))) }
+            _archivosCambiados.emit(null)
+        }
+    }
+
+    fun cancelarComando() {
+        puente.cancelarLinea()
+        trabajoComando?.cancel()
+        _estado.update { it.copy(comandoEnCurso = null) }
+    }
+
+    fun descartarComando(comando: String) = _estado.update { it.copy(comandosDescartados = it.comandosDescartados + comando) }
+
     private val _estado = MutableStateFlow(EstadoAgente())
     val estado: StateFlow<EstadoAgente> = _estado.asStateFlow()
     private var trabajo: Job? = null
@@ -560,6 +618,8 @@ class AgenteViewModel @Inject constructor(
                             trabajando = false,
                             conversacion = (historial + MensajeAgente(MensajeAgente.USUARIO, instruccion) + MensajeAgente(MensajeAgente.ASISTENTE, propuesta.resumen)),
                             propuesta = propuesta,
+                            resultadosComandos = emptyMap(),
+                            comandosDescartados = emptySet(),
                             decisiones = propuesta.cambios.associate { c -> c.ruta to true },
                             incluidos = contexto.incluidos,
                             omitidos = contexto.omitidos
